@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>元气打卡 完整版 · 纸间时光日记</title>
+<!-- Google Fonts: 马善政毛笔楷体 + 原有字体 (日记专用) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&family=Caveat:wght@400;500;600&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="header">
+  <div id="remaining-time">今日剩余</div>
+  <div class="header-right">
+    <div id="punch-header-buttons" style="display: flex; gap: 8px;">
+      <button id="add-task">
+        <svg class="add-icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22">
+          <path d="M512.17594 1023.648121c-29.52585 0-58.347943-6.397801-58.347943-37.395145V564.030115H37.459123c-23.76783 0-37.459123-22.392303-37.459123-51.182406 0-26.614851 10.076536-51.790197 35.187904-51.790198h425.005904V43.888913c0-28.054356 20.888819-43.888913 51.854176-43.888913 28.790103 0 51.182406 12.795602 51.182406 37.395145v416.49683h430.156133c28.790103 0 30.261598 34.516135 30.261598 58.283965s-7.933273 51.182406-36.723376 51.182406H563.326357v422.926619c0.735747 24.40761-21.592578 37.363156-51.150417 37.363156z" fill="#ffffff"></path>
+        </svg>
+      </button>
+      <button id="settings-btn" class="settings-btn">
+        <svg class="menu-icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22">
+          <path d="M110.890667 140.437333h803.093333c6.357333 0 9.557333 3.2 9.557333 9.557334v71.722666c0 6.357333-3.2 9.557333-9.557333 9.557334H110.890667c-6.378667 0-9.557333-3.2-9.557334-9.557334V149.973333c0-6.357333 3.2-9.557333 9.557334-9.557333zM110.890667 465.92h803.093333c6.357333 0 9.557333 3.2 9.557333 9.578667v71.701333c0 6.378667-3.2 9.557333-9.557333 9.557333H110.890667c-6.378667 0-9.557333-3.2-9.557334-9.557333v-71.701333c0-6.378667 3.2-9.557334 9.557334-9.557334zM110.890667 791.424h803.093333c6.357333 0 9.557333 3.2 9.557333 9.557333v71.701334c0 6.4-3.2 9.578667-9.557333 9.578666H110.890667c-6.378667 0-9.557333-3.2-9.557334-9.578666v-71.68c0-6.4 3.2-9.578667 9.557334-9.578667z" fill="#ffffff"></path>
+        </svg>
+      </button>
+    </div>
+    <button id="today-header-btn" class="today-header-btn" style="display: none;">今</button>
+    <!-- 日记页面新建日记本按钮（图标） -->
+    <button id="journal-add-book-btn" class="journal-add-book-btn" style="display: none;">
+      <svg class="add-icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22">
+        <path d="M512.17594 1023.648121c-29.52585 0-58.347943-6.397801-58.347943-37.395145V564.030115H37.459123c-23.76783 0-37.459123-22.392303-37.459123-51.182406 0-26.614851 10.076536-51.790197 35.187904-51.790198h425.005904V43.888913c0-28.054356 20.888819-43.888913 51.854176-43.888913 28.790103 0 51.182406 12.795602 51.182406 37.395145v416.49683h430.156133c28.790103 0 30.261598 34.516135 30.261598 58.283965s-7.933273 51.182406-36.723376 51.182406H563.326357v422.926619c0.735747 24.40761-21.592578 37.363156-51.150417 37.363156z" fill="#ffffff"></path>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section id="punch-section" class="tab-section active">
+    <ul id="punch-list"></ul>
+  </section>
+
+  <section id="time-section" class="tab-section">
+    <div class="calendar-header" id="time-header">
+      <button id="prev-time-day" class="month-nav-btn">‹</button>
+      <h3 id="current-time-date" class="month-title-clickable"></h3>
+      <button id="next-time-day" class="month-nav-btn">›</button>
+      <input type="date" id="time-date-picker" style="display: none;">
+    </div>
+    <div id="time-summary">
+        <div id="chart-legend"></div>
+    </div>
+  </section>
+
+  <section id="calendar-section" class="tab-section">
+    <div class="calendar-header">
+      <button id="prev-month" class="month-nav-btn">‹</button>
+      <h3 id="current-month" class="month-title-clickable"></h3>
+      <button id="next-month" class="month-nav-btn">›</button>
+    </div>
+    
+    <div class="weekdays-header">
+      <div>周一</div>
+      <div>周二</div>
+      <div>周三</div>
+      <div>周四</div>
+      <div>周五</div>
+      <div>周六</div>
+      <div>周日</div>
+    </div>
+    
+    <div id="calendar-grid" class="calendar-grid"></div>
+
+    <div id="day-details-modal" class="day-details-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="selected-date-title">2024年08月01日 周四</h3>
+          <button id="close-day-details" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="day-punch-summary">
+            <div class="summary-stats">
+              <div class="stat-item">
+                <span class="stat-name">计划总数</span>
+                <span id="total-plans" class="stat-value">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-name">已完成</span>
+                <span id="completed-plans" class="stat-value">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-name">完成率</span>
+                                <span id="completion-rate" class="stat-value">0%</span>
+              </div>
+            </div>
+          </div>
+          <div id="day-punch-list">
+            <h4>今日计划</h4>
+            <div id="day-punch-items"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日记页面 - 多书架翻页日记本（已去除所有背景文字和装饰） -->
+  <section id="journal-section" class="tab-section">
+    <div class="journal-multi-container">
+      <!-- 书架视图（已去除背景视图，仅保留卡片网格） -->
+      <div class="bookshelf-view" id="bookshelfView">
+        <div class="books-grid" id="booksGrid"></div>
+        <div id="editModeTip" style="text-align:center; margin-top:1rem; min-height: 0;"></div>
+      </div>
+
+      <!-- 日记本视图 -->
+      <div class="notebook-view" id="notebookView">
+        <div class="notebook">
+          <div class="coil-effect"></div>
+          <div class="page-card" id="pageCard">
+            <div class="journal-header">
+              <span class="page-number" id="pageNumDisplay">第 1 页</span>
+              <span class="last-edited" id="lastEditedTime"><i class="far fa-clock"></i> 刚刚</span>
+            </div>
+            <input type="text" class="diary-title" id="diaryTitle" placeholder="日记标题 · 此刻心情" autocomplete="off">
+            <textarea class="diary-content" id="diaryContent" placeholder="写下今天的故事、灵感或心事……&#10;每一页都值得珍藏。"></textarea>
+          </div>
+
+          <!-- 快速翻页区域 -->
+          <div class="quick-page-wrapper">
+            <div class="quick-page-container">
+              <i class="fas fa-arrows-alt-h" style="font-size:0.7rem; color:#b29a6b;"></i>
+              <input type="range" id="quickPageSlider" class="quick-page-slider" min="1" max="1" value="1" step="1">
+              <div class="quick-page-value" id="quickPageValue">1 / 1</div>
+            </div>
+            <div id="sliderBubble" class="slider-bubble">
+              <div class="bubble-line1" id="bubbleLine1">第1页 · 日期</div>
+              <div class="bubble-line2" id="bubbleLine2">标题</div>
+            </div>
+          </div>
+
+          <!-- 底部操作栏 -->
+          <div class="action-bar">
+            <button class="nav-btn back-shelf-btn" id="backToShelfBtn"><i class="fas fa-arrow-left"></i></button>
+            <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-left"></i></button>
+            <button class="nav-btn" id="addPageBtn"><i class="fas fa-plus"></i></button>
+            <div class="page-indicator"><i class="fas fa-book-open"></i> <span id="pageCounter">1 / 1</span></div>
+            <button class="nav-btn" id="deletePageBtn"><i class="fas fa-trash-alt"></i></button>
+            <button class="nav-btn" id="nextPageBtn"><i class="fas fa-chevron-right"></i></button>
+            <select id="fontSelect" class="font-selector">
+              <option value="default">📝 默认</option>
+              <option value="mashanzheng">✍️ 马善政毛笔楷书</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="navbar" id="navbar">
+  <button id="nav-punch" class="active">打卡</button>
+  <button id="nav-time">时间</button>
+  <button id="nav-calendar">日历</button>
+  <button id="nav-journal">日记</button>
+</div>
+
+<div id="settings-modal" class="settings-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>设置</h3>
+      <button id="close-settings" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="setting-item">
+        <div class="setting-info">
+          <h4>隐藏非周期计划</h4>
+          <p class="setting-desc">隐藏已结束的计划和不在当前周期内的计划</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="hide-inactive-plans">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-info">
+          <h4>数据备份</h4>
+          <p class="setting-desc">导出或导入应用数据</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="export-data-btn" class="backup-btn">导出数据</button>
+          <button id="import-data-btn" class="backup-btn">导入数据</button>
+          <input type="file" id="import-data-input" accept=".json" style="display: none;">
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-info">
+          <h4>清空所有记录</h4>
+          <p class="setting-desc">删除所有打卡记录（除日记外）</p>
+        </div>
+        <button id="clear-all-data-btn" class="danger-btn">清空记录</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="save-settings" class="primary-btn">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="backup-modal" class="settings-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>数据备份</h3>
+      <button id="close-backup-modal" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="backup-content">
+        <div style="text-align: center; padding: 30px 0;">
+          <div style="font-size: 48px; margin-bottom: 20px; color: #ff7f50;">📊</div>
+          <h4 style="margin-bottom: 15px; color: #333;">数据备份管理</h4>
+          <p style="color: #666; line-height: 1.6; margin-bottom: 30px;">
+            您可以导出所有数据到本地文件，或从备份文件恢复数据。
+          </p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <button id="export-all-data" class="primary-btn" style="width: 100%; padding: 16px;">
+              <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                导出全部数据
+              </span>
+            </button>
+            
+            <button id="import-all-data" class="primary-btn" style="width: 100%; padding: 16px; background: #4a90e2;">
+              <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                  <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+                </svg>
+                从文件导入数据
+              </span>
+            </button>
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+            
+            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+              <h5 style="margin-top: 0; margin-bottom: 10px; color: #333;">备份说明</h5>
+              <ul style="margin: 0; padding-left: 20px; color: #666; font-size: 14px;">
+                <li>导出数据包含：打卡计划、计时记录和设置</li>
+                <li>导入数据将覆盖当前所有数据</li>
+                <li>建议定期备份数据以防丢失</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="close-backup-btn" class="primary-btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="year-month-picker-modal" class="year-month-picker-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>选择年份和月份</h3>
+      <button id="close-year-month-picker" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="year-month-selector">
+        <div class="year-selector">
+          <button id="prev-year" class="year-nav-btn">‹</button>
+          <h4 id="current-year">2026</h4>
+          <button id="next-year" class="year-nav-btn">›</button>
+        </div>
+        <div class="months-grid">
+          <div class="month-item" data-month="1">1月</div>
+          <div class="month-item" data-month="2">2月</div>
+          <div class="month-item" data-month="3">3月</div>
+          <div class="month-item" data-month="4">4月</div>
+          <div class="month-item" data-month="5">5月</div>
+          <div class="month-item" data-month="6">6月</div>
+          <div class="month-item" data-month="7">7月</div>
+          <div class="month-item" data-month="8">8月</div>
+          <div class="month-item" data-month="9">9月</div>
+          <div class="month-item" data-month="10">10月</div>
+          <div class="month-item" data-month="11">11月</div>
+          <div class="month-item" data-month="12">12月</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="confirm-year-month" class="primary-btn">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="date-picker-modal" class="year-month-picker-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>选择日期</h3>
+      <button id="close-date-picker" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0;">
+        <button id="dp-prev-month" class="month-nav-btn" style="width:40px; height:40px;">‹</button>
+        <h4 id="dp-current-month" style="margin:0; font-size:18px;"></h4>
+        <button id="dp-next-month" class="month-nav-btn" style="width:40px; height:40px;">›</button>
+      </div>
+      <div class="weekdays-header" style="margin-top: 16px;">
+        <div>周一</div><div>周二</div><div>周三</div><div>周四</div><div>周五</div><div>周六</div><div>周日</div>
+      </div>
+      <div id="date-picker-grid" class="calendar-grid" style="margin-bottom: 16px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="confirm-date-picker" class="primary-btn">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="new-plan-page">
+  <div class="top-bar">
+    <button id="back-btn" class="back-symbol">
+      <svg class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+        <path d="M724.010667 218.304V140.992a7.978667 7.978667 0 0 0-12.906667-6.293333L260.309333 486.826667a31.872 31.872 0 0 0 0 50.304l450.773334 352.085333a7.957333 7.957333 0 0 0 12.906666-6.293333v-77.290667c0-4.906667-2.282667-9.6-6.08-12.608L357.909333 512l360-281.109333a16.170667 16.170667 0 0 0 6.08-12.586667z" fill="#ffffff"></path>
+      </svg>
+    </button>
+    <h2>新增计划</h2>
+    <button id="save-plan-btn" class="top-save-btn">
+      <svg class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+        <path d="M718.506667 81.770667v2.901333c10.752 3.242667 20.650667 9.152 28.714666 17.216l174.890667 174.890667c12.906667 12.906667 20.117333 30.336 20.117333 48.618666v582.4c0 19.050667-15.381333 34.432-34.432 34.432H116.202667a34.389333 34.389333 0 0 1-34.432-34.432V116.202667c0-19.050667 15.381333-34.432 34.432-34.432H718.506667z m-25.386667 77.44H159.210667v705.578666h705.578666V328.938667L718.506667 182.656l-25.386667-23.445333z" fill="#ffffff"></path>
+        <path d="M257.770667 257.770667h78.229333v234.666666h-78.229333z" fill="#ffffff"></path>
+        <path d="M784.277333 590.229333v293.333334h-78.229333V668.437333H337.493333v215.125334h-78.208v-293.333334z" fill="#ffffff"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="content-wrapper">
+    <label>提醒时间</label>
+    <input type="time" id="reminder-time">
+    
+    <label>卡片名称</label>
+    <textarea id="plan-name" rows="2" autofocus></textarea>
+
+    <label>选择图标</label>
+    <div class="icon-selector-container">
+      <div id="selected-icon-preview" class="icon-preview"></div>
+      <button id="upload-icon-btn" class="icon-upload-btn">点击选择图片</button>
+      <input type="file" id="icon-upload-input" accept="image/*" style="display: none;">
+    </div>
+    
+    <label>最近使用的图标</label>
+    <div id="recent-icons-container" class="recent-icons"></div>
+
+    <label>详细描述</label>
+    <textarea id="plan-desc"></textarea>
+
+    <div class="form-section">
+      <label>计划频率</label>
+      <div class="frequency-options">
+        <div class="frequency-option selected" data-value="once">
+          <div class="frequency-text">单次</div>
+        </div>
+        <div class="frequency-option" data-value="daily">
+          <div class="frequency-text">每天</div>
+        </div>
+        <div class="frequency-option" data-value="weekly">
+          <div class="frequency-text">每周</div>
+        </div>
+        <div class="frequency-option" data-value="monthly">
+          <div class="frequency-text">每月</div>
+        </div>
+        <div class="frequency-option" data-value="yearly">
+          <div class="frequency-text">每年</div>
+        </div>
+        <div class="frequency-option" data-value="custom">
+          <div class="frequency-text">自定义</div>
+        </div>
+      </div>
+      <select id="plan-frequency" style="display: none;">
+        <option value="once" selected>单次</option>
+        <option value="daily">每天</option>
+        <option value="weekly">每周</option>
+        <option value="monthly">每月</option>
+        <option value="yearly">每年</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+
+    <div id="daily-times-container" style="display:none;margin-top:12px;padding:16px;background:rgba(255,127,80,0.05);border-radius:var(--border-radius-md);border:1px solid rgba(255,127,80,0.1);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <span style="font-size:14px;color:#666;">每天打卡次数：</span>
+        <input type="number" id="daily-times" value="1" min="1" style="width:80px;padding:8px 12px;">
+        <span style="font-size:14px;color:#666;">次</span>
+      </div>
+      <div style="font-size:12px;color:#ff7f50;margin-top:4px;padding:6px 10px;background:rgba(255,127,80,0.1);border-radius:6px;">
+        提示：需要完成所有次数才算打卡成功
+      </div>
+    </div>
+
+    <div id="weekdays-container" style="display:none;margin-top:12px;padding:16px;background:rgba(255,127,80,0.05);border-radius:var(--border-radius-md);border:1px solid rgba(255,127,80,0.1);">
+      <div style="font-size:14px;color:#666;margin-bottom:12px;font-weight:500;">选择重复的星期：</div>
+      <div class="weekdays">
+        <button type="button" data-day="1">周一</button>
+        <button type="button" data-day="2">周二</button>
+        <button type="button" data-day="3">周三</button>
+        <button type="button" data-day="4">周四</button>
+        <button type="button" data-day="5">周五</button>
+        <button type="button" data-day="6">周六</button>
+        <button type="button" data-day="0">周日</button>
+      </div>
+    </div>
+
+    <div id="custom-frequency-container" style="display:none;margin-top:12px;padding:20px;background:rgba(255,127,80,0.05);border-radius:var(--border-radius-md);border:1px solid rgba(255,127,80,0.1);">
+      <div style="margin-bottom:16px;">
+        <div style="font-size:14px;color:#666;margin-bottom:8px;font-weight:500;">重复间隔</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:4px;flex:1;">
+            <span style="font-size:14px;color:#666;">每</span>
+            <input type="number" id="custom-interval" value="1" min="1" style="flex:1;padding:10px 12px;text-align:center;">
+            <select id="custom-unit" style="flex:2;padding:10px 12px;width: auto;min-width: 100px;">
+              <option value="days">天</option>
+              <option value="weeks">周</option>
+              <option value="months">月</option>
+              <option value="years">年</option>
+            </select>
+            <span style="font-size:14px;color:#666;">重复一次</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="custom-weekdays-container" style="display:none;margin-top:16px;">
+        <div style="font-size:14px;color:#666;margin-bottom:12px;font-weight:500;">重复于：</div>
+        <div class="weekdays">
+          <button type="button" data-day="1">周一</button>
+          <button type="button" data-day="2">周二</button>
+          <button type="button" data-day="3">周三</button>
+          <button type="button" data-day="4">周四</button>
+          <button type="button" data-day="5">周五</button>
+          <button type="button" data-day="6">周六</button>
+          <button type="button" data-day="0">周日</button>
+        </div>
+      </div>
+      
+      <div id="custom-monthday-container" style="display:none;margin-top:16px;">
+        <div style="font-size:14px;color:#666;margin-bottom:12px;font-weight:500;">每月重复设置：</div>
+        <div style="display:flex;flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;">
+          <select id="custom-monthday-type" style="flex:1;padding:10px 12px;min-width: 120px;">
+            <option value="day">指定日期</option>
+            <option value="weekday">指定星期</option>
+          </select>
+          
+          <div id="custom-specific-day" style="display:flex;align-items:center;gap:4px;flex:1;min-width: 0;">
+            <div style="position:relative;flex:1;">
+              <input type="text" id="custom-day-of-month" placeholder="选择日期" readonly style="width:100%;padding:10px 12px;min-width: 0;">
+              <div id="day-calendar-picker" class="day-calendar-picker" style="display:none;position:absolute;top:100%;left:0;z-index:1000;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);width: 200px;">
+                <div class="day-calendar-grid"></div>
+              </div>
+            </div>
+            <span style="font-size:14px;color:#666;white-space: nowrap;">日</span>
+          </div>
+          
+          <div id="custom-weekday-option" style="display:none;flex:1;min-width: 0;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select id="custom-week-number" style="flex:1;padding:10px 12px;min-width: 0;">
+                <option value="1">第一个</option>
+                <option value="2">第二个</option>
+                <option value="3">第三个</option>
+                <option value="4">第四个</option>
+                <option value="-1">最后一个</option>
+              </select>
+              <select id="custom-weekday" style="flex:1;padding:10px 12px;min-width: 0;">
+                <option value="0">周日</option>
+                <option value="1">周一</option>
+                <option value="2">周二</option>
+                <option value="3">周三</option>
+                <option value="4">周四</option>
+                <option value="5">周五</option>
+                <option value="6">周六</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="custom-yearday-container" style="display:none;margin-top:16px;">
+        <div style="font-size:14px;color:#666;margin-bottom:12px;font-weight:500;">每年重复设置：</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap: wrap;">
+            <select id="custom-month-of-year" style="flex:1;padding:10px 12px;min-width: 0;">
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+            <div style="flex:1;position:relative;min-width: 0;">
+              <input type="text" id="custom-day-of-year" placeholder="选择日期" readonly style="width:100%;padding:10px 12px;min-width: 0;">
+              <div id="year-day-calendar-picker" class="day-calendar-picker" style="display:none;position:absolute;top:100%;left:0;z-index:1000;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);width: 200px;">
+                <div class="day-calendar-grid"></div>
+              </div>
+            </div>
+            <span style="font-size:14px;color:#666;white-space: nowrap;">日</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label style="display:block;margin-bottom:12px;font-size:14px;font-weight:600;color:#333;">计时类型</label>
+      <div class="timer-type-options">
+        <div class="timer-type-option" data-value="countup">
+          <div class="timer-type-text">正计时</div>
+        </div>
+        <div class="timer-type-option" data-value="countdown">
+          <div class="timer-type-text">倒计时</div>
+        </div>
+      </div>
+      <input type="hidden" id="timer-type" value="">
+    </div>
+
+    <div id="countdown-container" style="display:none;margin-top:12px;">
+      <label style="display:block;margin-bottom:12px;font-size:14px;font-weight:600;color:#333;">倒计时设置</label>
+      <div style="margin-bottom:12px;">
+        <div class="time-wheel-container modern-wheel" id="countdown-wheel">
+          <div class="wheel-group">
+            <div class="wheel-label">时</div>
+            <div class="wheel-value" data-part="hour">00</div>
+          </div>
+          <div class="wheel-group">
+            <div class="wheel-label">分</div>
+            <div class="wheel-value" data-part="minute">00</div>
+          </div>
+        </div>
+      </div>
+      <div class="countdown-tips">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="#ff7f50" style="margin-right: 4px;">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+        倒计时结束后会自动打卡
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:24px;">
+      <button id="end-plan-btn" class="end-plan-btn primary-btn">结束计划</button>
+    </div>
+  </div>
+</div>
+
+<div id="tomato-modal" class="tomato-modal">
+  <div class="modal-content tomato-content">
+    <div class="modal-header">
+      <h3 id="tomato-card-name">🍅 番茄钟</h3>
+      <button id="close-tomato" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body tomato-body">
+      <div class="tomato-timer">
+        <svg width="250" height="250" viewBox="0 0 250 250" id="tomato-svg">
+          <circle cx="125" cy="125" r="95" fill="none" stroke="#eee" stroke-width="8" stroke-linecap="round"/>
+          <circle cx="125" cy="125" r="95" fill="none" stroke="#ff7f50" stroke-width="8" stroke-linecap="round" 
+                  transform="rotate(-90 125 125)" stroke-dasharray="0 597" stroke-dashoffset="0" id="tomato-progress-ring"/>
+        </svg>
+        <div class="tomato-time-text" id="tomato-time-display">00:00:00</div>
+      </div>
+      <div class="tomato-controls">
+        <button id="tomato-start" class="tomato-btn start-btn">开始</button>
+        <button id="tomato-pause" class="tomato-btn pause-btn">暂停</button>
+        <button id="tomato-reset" class="tomato-btn reset-btn">重置</button>
+        <button id="tomato-complete" class="tomato-btn complete-btn">打卡完成</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="add-timer-modal" class="edit-timer-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="add-timer-modal-title">新增计时记录</h3>
+      <button id="close-add-timer" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group time-row" style="flex-direction: column; gap: 16px;">
+        <div class="time-field">
+          <label>开始时间</label>
+          <div class="time-picker-row" style="display: flex; gap: 8px; flex-wrap: nowrap;">
+            <div class="date-wheel-container modern-wheel" data-type="add-start-date">
+              <div class="wheel-group">
+                <div class="wheel-label">年</div>
+                <div class="wheel-value" data-part="year"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">月</div>
+                <div class="wheel-value" data-part="month"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">日</div>
+                <div class="wheel-value" data-part="day"></div>
+              </div>
+            </div>
+            <div class="time-wheel-container modern-wheel" data-type="add-start-time">
+              <div class="wheel-group">
+                <div class="wheel-label">时</div>
+                <div class="wheel-value" data-part="hour"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">分</div>
+                <div class="wheel-value" data-part="minute"></div>
+              </div>
+            </div>
+          </div>
+          <input type="text" id="add-start-date" style="display: none;">
+          <input type="text" id="add-start-time" style="display: none;">
+        </div>
+        <div class="time-field">
+          <label>结束时间</label>
+          <div class="time-picker-row" style="display: flex; gap: 8px; flex-wrap: nowrap;">
+            <div class="date-wheel-container modern-wheel" data-type="add-end-date">
+              <div class="wheel-group">
+                <div class="wheel-label">年</div>
+                <div class="wheel-value" data-part="year"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">月</div>
+                <div class="wheel-value" data-part="month"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">日</div>
+                <div class="wheel-value" data-part="day"></div>
+              </div>
+            </div>
+            <div class="time-wheel-container modern-wheel" data-type="add-end-time">
+              <div class="wheel-group">
+                <div class="wheel-label">时</div>
+                <div class="wheel-value" data-part="hour"></div>
+              </div>
+              <div class="wheel-group">
+                <div class="wheel-label">分</div>
+                <div class="wheel-value" data-part="minute"></div>
+              </div>
+            </div>
+          </div>
+          <input type="text" id="add-end-date" style="display: none;">
+          <input type="text" id="add-end-time" style="display: none;">
+        </div>
+      </div>
+      <div id="add-time-warning" class="warning-message" style="display: none; color: #ff4d4d; font-size: 12px; margin-bottom: 12px;">结束时间必须晚于开始时间</div>
+
+      <div class="form-group">
+        <label>事件类型</label>
+        <div id="add-card-capsule-container" class="card-capsule-container"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="save-new-timer-record" class="primary-btn">保存记录</button>
+    </div>
+  </div>
+</div>
+
+<div id="edit-timer-modal" class="edit-timer-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="edit-timer-modal-title">修改计时记录</h3>
+      <button id="close-edit-timer" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group time-row" style="flex-direction: column; gap: 16px;">
+        <div class="time-field">
+          <label>开始时间</label>
+          <div class="time-picker-row" style="display: flex; gap: 8px; flex-wrap: nowrap;">
+            <div class="date-wheel-container modern-wheel" data-type="edit-start-date">
+              <div class="wheel-group"><div class="wheel-label">年</div><div class="wheel-value" data-part="year"></div></div>
+              <div class="wheel-group"><div class="wheel-label">月</div><div class="wheel-value" data-part="month"></div></div>
+              <div class="wheel-group"><div class="wheel-label">日</div><div class="wheel-value" data-part="day"></div></div>
+            </div>
+            <div class="time-wheel-container modern-wheel" data-type="edit-start-time">
+              <div class="wheel-group"><div class="wheel-label">时</div><div class="wheel-value" data-part="hour"></div></div>
+              <div class="wheel-group"><div class="wheel-label">分</div><div class="wheel-value" data-part="minute"></div></div>
+            </div>
+          </div>
+          <input type="text" id="edit-start-date" style="display: none;">
+          <input type="text" id="edit-start-time" style="display: none;">
+        </div>
+        <div class="time-field">
+          <label>结束时间</label>
+          <div class="time-picker-row" style="display: flex; gap: 8px; flex-wrap: nowrap;">
+            <div class="date-wheel-container modern-wheel" data-type="edit-end-date">
+              <div class="wheel-group"><div class="wheel-label">年</div><div class="wheel-value" data-part="year"></div></div>
+              <div class="wheel-group"><div class="wheel-label">月</div><div class="wheel-value" data-part="month"></div></div>
+              <div class="wheel-group"><div class="wheel-label">日</div><div class="wheel-value" data-part="day"></div></div>
+            </div>
+            <div class="time-wheel-container modern-wheel" data-type="edit-end-time">
+              <div class="wheel-group"><div class="wheel-label">时</div><div class="wheel-value" data-part="hour"></div></div>
+              <div class="wheel-group"><div class="wheel-label">分</div><div class="wheel-value" data-part="minute"></div></div>
+            </div>
+          </div>
+          <input type="text" id="edit-end-date" style="display: none;">
+          <input type="text" id="edit-end-time" style="display: none;">
+        </div>
+      </div>
+      <div id="edit-time-warning" class="warning-message" style="display: none; color: #ff4d4d; font-size: 12px; margin-bottom: 12px;">结束时间必须晚于开始时间</div>
+      
+      <div class="form-group">
+        <label>事件类型</label>
+        <div id="edit-card-capsule-container" class="card-capsule-container"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="delete-timer-record" class="danger-btn">删除记录</button>
+      <button id="save-timer-record" class="primary-btn">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" style="position: fixed; top: 20px; left: 0; right: 0; display: flex; justify-content: center; z-index: 9999; pointer-events: none;"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
