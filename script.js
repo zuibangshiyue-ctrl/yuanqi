@@ -4950,28 +4950,37 @@ document.addEventListener('keydown', (e) => {
 });
 
 const remainingEl = document.getElementById('remaining-time');
+let remainingTimer = null;
+
+// 修复剩余时间显示精度问题：计算到次日00:00:00的向上取整数分钟，确保显示正确（如20:09时显示剩余3小时51分钟）
 function updateRemainingTime() {
   if (!remainingEl) return;
-  
   const now = new Date();
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  
-  const diff = end - now;
+  // 获取次日零点 (今日日期 + 1 天，时、分、秒、毫秒全部归零)
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0); // 次日 00:00:00.000
+
+  let diff = tomorrow - now;
   if (diff <= 0) {
     remainingEl.textContent = `今日剩余 0小时00分钟`;
     return;
   }
-  
-  const totalMinutes = Math.ceil(diff / (1000 * 60));
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  const formattedMinutes = m < 10 ? '0' + m : m;
-  remainingEl.textContent = `今日剩余 ${h}小时${formattedMinutes}分钟`;
+  // 向上取整剩余分钟数，确保显示到次日零点的完整分钟数
+  const totalRemainingMinutes = Math.ceil(diff / (1000 * 60));
+  const hours = Math.floor(totalRemainingMinutes / 60);
+  const minutes = totalRemainingMinutes % 60;
+  const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
+  if (hours === 0) {
+    remainingEl.textContent = `今日剩余 ${minutes}分钟`;
+  } else {
+    remainingEl.textContent = `今日剩余 ${hours}小时${formattedMinutes}分钟`;
+  }
 }
 
+if (remainingTimer) clearInterval(remainingTimer);
 updateRemainingTime();
-setInterval(updateRemainingTime, 60000);
+remainingTimer = setInterval(updateRemainingTime, 1000);
 
 function updateHeaderButtons() {
   if (punchSection && punchSection.classList.contains('active')) {
