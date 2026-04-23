@@ -1,3 +1,185 @@
+/* ================== 安全区域适配 (PWA独立应用模式修复状态栏重叠) ================== */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --header-height: 60px;
+  --navbar-height: 64px;
+  --primary-color: #ff7f50;
+  --primary-light: #ff9a7d;
+  --primary-dark: #ff5a2f;
+  --secondary-color: #4a90e2;
+  --success-color: #4caf50;
+  --danger-color: #ff4d4d;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
+  --card-radius: 16px;
+  --card-shadow: 0 4px 12px rgba(255, 127, 80, 0.1);
+  --card-shadow-hover: 0 8px 20px rgba(255, 127, 80, 0.2);
+  --grid: 12px;
+  --top-bar-height: 56px;
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --gradient-primary: linear-gradient(135deg, #ff7f50 0%, #ff9a7d 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body{
+  margin:0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #fff8f0 0%, #fff0e6 100%);
+  color:#333;
+  padding-top: calc(var(--header-height) + var(--safe-area-inset-top));
+  min-height: 100vh;
+}
+
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding: var(--safe-area-inset-top) var(--grid) 0 var(--grid);
+  background: var(--gradient-primary);
+  color:white;
+  font-size:16px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: calc(var(--header-height) + var(--safe-area-inset-top));
+  box-sizing: border-box;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(255, 127, 80, 0.2);
+}
+
+/* 日记模式头部颜色 */
+header.journal-header {
+  background: #D9C8A9 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+header #remaining-time{
+  font-size:16px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 6px 12px;
+  border-radius: var(--border-radius-lg);
+  backdrop-filter: blur(10px);
+}
+
+header .header-right{
+  display:flex;
+  gap:8px;
+  align-items: center;
+}
+
+header button#add-task {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: var(--border-radius-lg);
+  padding: 0;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  backdrop-filter: blur(10px);
+}
+
+header button#add-task:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+#add-task svg.add-icon {
+  width: 22px;
+  height: 22px;
+  transition: var(--transition);
+}
+
+.settings-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  transition: var(--transition);
+  backdrop-filter: blur(10px);
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.settings-btn svg.menu-icon {
+  width: 22px;
+  height: 22px;
+  transition: var(--transition);
+}
+
+/* 日记新建按钮样式 */
+.journal-add-book-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  transition: var(--transition);
+  backdrop-filter: blur(10px);
+}
+
+.journal-add-book-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.journal-add-book-btn svg.add-icon {
+  width: 22px;
+  height: 22px;
+  transition: var(--transition);
+}
+
+main {
+  padding: var(--grid);
+  box-sizing: border-box;
+  height: calc(100vh - var(--header-height) - var(--navbar-height) - var(--safe-area-inset-top));
+  overflow: hidden;
+  animation: fadeIn 0.5s ease;
+}
+
+.tab-section {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-section.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px);
+}
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ================== 修改：打卡列表网格布局 - 每行3个卡片 ================== */
 #punch-list{
   list-style:none;
@@ -254,188 +436,8 @@
   }
 }
 
-:root{
-  --primary-color: #ff7f50;
-  --primary-light: #ff9a7d;
-  --primary-dark: #ff5a2f;
-  --secondary-color: #4a90e2;
-  --success-color: #4caf50;
-  --danger-color: #ff4d4d;
---warning-color: #ff9800;
-  --info-color: #2196f3;
-  --card-radius: 16px;
-  --card-shadow: 0 4px 12px rgba(255, 127, 80, 0.1);
-  --card-shadow-hover: 0 8px 20px rgba(255, 127, 80, 0.2);
-  --grid: 12px;
-  --header-height: 60px;
-  --top-bar-height: 56px;
-  --navbar-height: 64px;
-  --border-radius-sm: 8px;
-  --border-radius-md: 12px;
-  --border-radius-lg: 16px;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --gradient-primary: linear-gradient(135deg, #ff7f50 0%, #ff9a7d 100%);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body{
-  margin:0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  background: linear-gradient(135deg, #fff8f0 0%, #fff0e6 100%);
-  color:#333;
-  padding-top: var(--header-height);
-  min-height: 100vh;
-}
-
-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:0 var(--grid);
-  background: var(--gradient-primary);
-  color:white;
-  font-size:16px;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: var(--header-height);
-  box-sizing: border-box;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(255, 127, 80, 0.2);
-}
-
-/* 日记模式头部颜色 */
-header.journal-header {
-  background: #D9C8A9 !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-header #remaining-time{
-  font-size:16px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.15);
-  padding: 6px 12px;
-  border-radius: var(--border-radius-lg);
-  backdrop-filter: blur(10px);
-}
-
-header .header-right{
-  display:flex;
-  gap:8px;
-  align-items: center;
-}
-
-header button#add-task {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: var(--border-radius-lg);
-  padding: 0;
-  cursor: pointer;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-  backdrop-filter: blur(10px);
-}
-
-header button#add-task:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-}
-
-#add-task svg.add-icon {
-  width: 22px;
-  height: 22px;
-  transition: var(--transition);
-}
-
-.settings-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: var(--border-radius-lg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  transition: var(--transition);
-  backdrop-filter: blur(10px);
-}
-
-.settings-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-}
-
-.settings-btn svg.menu-icon {
-  width: 22px;
-  height: 22px;
-  transition: var(--transition);
-}
-
-/* 日记新建按钮样式 */
-.journal-add-book-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: var(--border-radius-lg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  transition: var(--transition);
-  backdrop-filter: blur(10px);
-}
-
-.journal-add-book-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-}
-
-.journal-add-book-btn svg.add-icon {
-  width: 22px;
-  height: 22px;
-  transition: var(--transition);
-}
-
-main {
-  padding: var(--grid);
-  box-sizing: border-box;
-  height: calc(100vh - var(--header-height) - var(--navbar-height));
-  overflow: hidden;
-  animation: fadeIn 0.5s ease;
-}
-
-.tab-section {
-  display: none;
-  height: 100%;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.tab-section.active {
-  display: block;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px);
-}
-  to { opacity: 1; transform: translateY(0); }
-}
-
+/* 去除打卡卡片悬停向上移动效果 */
 .punch-item:hover {
-  transform: translateY(-4px);
   box-shadow: var(--card-shadow-hover);
 }
 
@@ -1083,8 +1085,8 @@ main {
   display:flex;
   align-items:center;
   position: relative;
-  min-height: var(--top-bar-height);
-  padding: 8px 16px;
+  min-height: calc(var(--top-bar-height) + var(--safe-area-inset-top));
+  padding: var(--safe-area-inset-top) 16px 8px 16px;
   background: var(--gradient-primary);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 2px 12px rgba(255, 127, 80, 0.2);
@@ -3284,8 +3286,8 @@ body.edit-mode-active #journal-section .book-card {
   background: #fff3e0;
   border: 1px solid #e7b87b;
 }
+/* 去除日记卡片悬停向上移动效果 */
 #journal-section .book-card:hover {
-  transform: translateY(-2px);
   box-shadow: 0 8px 16px -10px rgba(0, 0, 0, 0.15);
 }
 #journal-section .book-cover-icon {
