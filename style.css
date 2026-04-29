@@ -1081,21 +1081,22 @@ main {
   overflow:hidden;
 }
 
-#new-plan-page .top-bar{
-  display:flex;
-  align-items:center;
+/* ========== 关键修复：新增计划页面顶部安全区域适配，与主打卡页头部保持一致 ========== */
+#new-plan-page .top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   position: relative;
-  min-height: calc(var(--top-bar-height) + var(--safe-area-inset-top));
-  padding: var(--safe-area-inset-top) 16px 8px 16px;
+  min-height: calc(var(--top-bar-height) + env(safe-area-inset-top, 0px));
+  padding: max(env(safe-area-inset-top, 0px), 12px) 16px 8px 16px;
   background: var(--gradient-primary);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 2px 12px rgba(255, 127, 80, 0.2);
   z-index: 25;
   flex-shrink: 0;
-  justify-content: space-between;
 }
 
-#new-plan-page .top-bar button.back-symbol{
+#new-plan-page .top-bar button.back-symbol {
   position: relative;
   padding: 8px;
   font-size: 24px;
@@ -1109,28 +1110,30 @@ main {
   align-items: center;
   justify-content: center;
   font-weight: normal;
-  z-index: 1;
   border-radius: var(--border-radius-lg);
   transition: var(--transition);
+  margin: 0;
+  flex-shrink: 0;
 }
 
 #new-plan-page .top-bar button.back-symbol:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
-#new-plan-page h2{
-  margin:0;
-  flex:1;
-  text-align:center;
-  font-size:18px;
+#new-plan-page h2 {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
   position: absolute;
-left: 0;
+  left: 0;
   right: 0;
   width: 100%;
   pointer-events: none;
   line-height: 44px;
   color: #fff;
   font-weight: 600;
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
 }
 
 .top-save-btn {
@@ -1147,9 +1150,10 @@ left: 0;
   align-items: center;
   justify-content: center;
   font-weight: normal;
-  z-index: 1;
   border-radius: var(--border-radius-lg);
   transition: var(--transition);
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .top-save-btn:hover {
@@ -1158,7 +1162,7 @@ left: 0;
 
 #new-plan-page .content-wrapper {
   flex: 1;
-overflow-y: auto;
+  overflow-y: auto;
   padding: 20px;
   padding-top: 0;
   box-sizing: border-box;
@@ -1166,6 +1170,7 @@ overflow-y: auto;
   background: linear-gradient(135deg, #fff8f0 0%, #fff0e6 100%);
 }
 
+/* 其他原有样式保持不变 */
 #new-plan-page label{
   display:block;
 margin:16px 0 8px;
@@ -1510,27 +1515,7 @@ padding: 10px 16px;
   border-color: var(--primary-color);
 }
 
-#new-plan-page button.save-btn{
-  margin-top:24px;
-  padding:16px;
-  font-size:16px;
-  background: var(--gradient-primary);
-  color:#fff;
-  border:none;
-  border-radius: var(--border-radius-md);
-  cursor:pointer;
-  width:100%;
-  box-sizing:border-box;
-  font-weight: 600;
-  transition: var(--transition);
-  box-shadow: 0 4px 12px rgba(255, 127, 80, 0.3);
-}
-
-#new-plan-page button.save-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 127, 80, 0.4);
-}
-
+/* 设置模态框样式（无确定按钮） */
 .settings-modal {
   display: none;
   position: fixed;
@@ -1680,14 +1665,6 @@ input:focus + .slider {
 
 input:checked + .slider:before {
   transform: translateX(26px);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 20px 24px;
-  background-color: #f9f9f9;
-  border-top: 1px solid #eee;
 }
 
 .primary-btn {
@@ -2019,19 +1996,25 @@ input:checked + .slider:before {
 }
   
   #new-plan-page .top-bar {
-    min-height: var(--top-bar-height);
-    padding: 8px;
-}
+    min-height: calc(var(--top-bar-height) + env(safe-area-inset-top, 0px));
+    padding: max(env(safe-area-inset-top, 0px), 8px) 16px 8px 16px;
+  }
   
   #new-plan-page h2 {
     font-size: 16px;
-}
-  
+    top: calc(env(safe-area-inset-top, 0px) + 4px);
+  }
+
   #new-plan-page .top-bar button.back-symbol {
     font-size: 20px;
     width: 40px;
     height: 40px;
-}
+  }
+
+  .top-save-btn {
+    width: 40px;
+    height: 40px;
+  }
   
   header button#add-task,
   .settings-btn,
@@ -2056,10 +2039,6 @@ input:checked + .slider:before {
   
   .setting-item {
     padding: 16px 0;
-}
-  
-  .modal-footer {
-    padding: 20px;
 }
   
   .calendar-day .day-number {
@@ -3310,31 +3289,45 @@ body.edit-mode-active #journal-section .book-card {
   gap: 6px; /* 原8px → 6px */
   margin-top: 2px;
 }
-#journal-section .delete-book-btn {
+/* 删除和编辑按钮样式 - 与打卡卡片完全一致 */
+#journal-section .book-card .delete-book-btn,
+#journal-section .book-card .edit-book-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  background: rgba(250, 220, 200, 0.95);
-  border: none;
-  border-radius: 30px;
-  width: 24px;
-  height: 24px;
-  font-size: 0.65rem;
-  color: #b35f42;
-  cursor: pointer;
-  display: none;
-  align-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   justify-content: center;
-  z-index: 5;
+  align-items: center;
+  cursor: pointer;
+  z-index: 2;
+  font-size: 14px;
+  transition: var(--transition);
+  border: none;
+  display: none;
+  font-weight: bold;
 }
-body.edit-mode-active #journal-section .delete-book-btn {
+#journal-section .book-card .delete-book-btn {
+  top: 6px;
+  left: 6px;
+  background: var(--danger-color);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255, 77, 77, 0.3);
+}
+#journal-section .book-card .edit-book-btn {
+  top: 6px;
+  right: 6px;
+  background: var(--secondary-color);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+}
+body.edit-mode-active #journal-section .book-card .delete-book-btn,
+body.edit-mode-active #journal-section .book-card .edit-book-btn {
   display: flex;
 }
-#journal-section .delete-book-btn:hover {
-  background: #e6b49b;
-  color: #7e3a20;
+#journal-section .book-card .delete-book-btn:hover,
+#journal-section .book-card .edit-book-btn:hover {
+  transform: scale(1.1);
 }
-
 /* 编辑模式提示已完全隐藏 */
 #editModeTip {
   display: none;
@@ -3678,7 +3671,7 @@ body.edit-mode-active #journal-section .delete-book-btn {
   }
 }
 
-/* ================== 新增：日记本拖拽克隆体专用样式，修复文字图标错位 ================== */
+/* ================== 修复：日记本拖拽克隆体样式，防止文字/图标被放大 ================== */
 .drag-clone {
   box-sizing: border-box !important;
   background: #fffef5 !important;
@@ -3689,7 +3682,7 @@ body.edit-mode-active #journal-section .delete-book-btn {
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
-  padding: 0.8rem 0.5rem !important;
+  padding: 0.5rem 0.3rem !important;   /* 与原始卡片内边距一致 */
   margin: 0 !important;
   opacity: 1 !important;
   transform: none !important;
@@ -3700,37 +3693,39 @@ body.edit-mode-active #journal-section .delete-book-btn {
 }
 
 .drag-clone .book-cover-icon {
-  font-size: 2.8rem !important;
+  font-size: 2.2rem !important;         /* 与原始卡片图标大小完全一致 */
   color: #b58b5a !important;
-  margin-bottom: 0.3rem !important;
+  margin-bottom: 0.2rem !important;
   width: auto !important;
   height: auto !important;
 }
 
 .drag-clone .book-title {
   font-weight: 700 !important;
-  font-size: 0.85rem !important;
+  font-size: 0.8rem !important;         /* 与原始卡片标题大小一致 */
   color: #4c3b24 !important;
   word-break: break-word !important;
-  margin: 0.2rem 0 !important;
+  margin: 0.1rem 0 !important;
   white-space: normal !important;
   overflow: visible !important;
+  line-height: normal !important;
 }
 
 .drag-clone .book-meta {
-  font-size: 0.65rem !important;
+  font-size: 0.6rem !important;         /* 与原始卡片 meta 字体一致 */
   color: #b29a6b !important;
   display: flex !important;
   justify-content: center !important;
-  gap: 8px !important;
-  margin-top: 4px !important;
+  gap: 6px !important;
+  margin-top: 2px !important;
 }
 
-.drag-clone .delete-book-btn {
+.drag-clone .delete-book-btn,
+.drag-clone .edit-book-btn {
   display: none !important;
 }
 
-/* 修复打卡页面拖拽克隆的样式，避免受日记克隆影响 */
+/* 修复打卡卡片拖拽克隆样式，保持与原始卡片一致且不放大 */
 .punch-drag-clone {
   box-sizing: border-box !important;
   background: #ffffff !important;           /* 纯白背景，完全不透明 */
@@ -3739,7 +3734,7 @@ body.edit-mode-active #journal-section .delete-book-btn {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;   /* 修改为 flex-start，解决内容垂直下移问题 */
   padding: 12px !important;
   opacity: 1 !important;                    /* 完全不透明 */
   transform: none !important;
@@ -3747,6 +3742,16 @@ body.edit-mode-active #journal-section .delete-book-btn {
   pointer-events: none !important;
   z-index: 9999 !important;
   backdrop-filter: none !important;
+  font-size: inherit !important;            /* 继承原始字体大小 */
+}
+
+/* 移除原有的写死宽高字体规则，避免放大冲突（尺寸现由JS动态复制，保持与原始完全一致） */
+.punch-drag-clone .icon-container,
+.punch-drag-clone .icon-container .emoji-icon,
+.punch-drag-clone .icon-container img {
+  /* 具体尺寸内联由JS设置，此处仅保证不产生额外变换 */
+  transform: none !important;
+  transition: none !important;
 }
 
 /* ================== 新增：禁止移动端长按弹出菜单（输入框保留） ================== */
