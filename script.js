@@ -1022,10 +1022,8 @@ function initPunchHistory(punch) {
 function hasAnyCompletedCheckForOnce(punch) {
   if (punch.frequency !== 'once') return false;
   if (!punch.history) return false;
-  // 遍历所有历史记录，只要有任意一天 completed 为 true 则返回 true
   for (let date in punch.history) {
     const record = punch.history[date];
-    // 对于多打卡次数（dailyTimes>1）兼容：如果存在 maxPunches 且 punches 达到最大值则认为完成
     let isCompleted = false;
     if (punch.dailyTimes && punch.dailyTimes > 1) {
       const maxPunches = record.maxPunches || punch.dailyTimes;
@@ -1139,7 +1137,6 @@ function checkCountdownCompletion(p) {
           punches: 1,
           maxPunches: p.dailyTimes || 1
         };
-        // 单次计划自动打卡后，如果恢复了并完成，需要清除forceActive使其再次结束
         if (p.frequency === 'once' && p.forceActive === true) {
             p.forceActive = false;
         }
@@ -1289,7 +1286,34 @@ function saveToLocalStorage() {
   }
 }
 
-// 周期判断核心修改：支持单次计划恢复标志 forceActive
+/**
+ * 判断一个卡片是否应显示在打卡列表中（核心修复点）
+ * 当“隐藏非周期计划”关闭时（hideInactivePlans = false），无条件显示所有卡片。
+ * 当开启隐藏时，只显示当前处于周期内、或未完成的单次计划等。
+ */
+function shouldShowPunch(p) {
+  // 若用户关闭了隐藏非周期计划，则所有卡片一律显示
+  if (!hideInactivePlans) {
+    return true;
+  }
+
+  // 以下为 hideInactivePlans = true 时的原始严格逻辑
+  const inPeriod = isInCurrentPeriod(p);
+  if (!inPeriod) {
+    return false;
+  }
+  
+  if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
+    return true;
+  }
+  
+  if (p.frequency === 'once' && isPunchDoneToday(p)) {
+    return false;
+  }
+  
+  return true;
+}
+
 function isInCurrentPeriod(p) {
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -1297,20 +1321,16 @@ function isInCurrentPeriod(p) {
   const todayStr = getTodayDateString();
   const todayRecord = p.history && p.history[todayStr];
   
-  // 单次计划特殊处理：如果已恢复（forceActive=true），则视为活跃周期，允许打卡
   if (p.frequency === 'once' && p.forceActive === true) {
       return true;
   }
-  // 单次计划未恢复：如果历史上已打卡（任何一天完成），则不再属于当前周期，永久结束
   if (p.frequency === 'once') {
     if (hasAnyCompletedCheckForOnce(p)) {
       return false;
     }
-    // 未完成过任何一次打卡，则当天属于周期（允许打卡）
     return true;
   }
   
-  // 原有其他频率的逻辑
   if (p.frequency === 'once' && todayRecord && todayRecord.checked) {
     return false;
   }
@@ -1440,25 +1460,6 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
     const nthTargetDay = targetDays[weekNumber - 1];
     return nthTargetDay && day === nthTargetDay.getDate();
   }
-}
-
-function shouldShowPunch(p) {
-  const inPeriod = isInCurrentPeriod(p);
-  // 单次计划已结束（存在历史打卡）但 hideInactivePlans 可能隐藏；但即使不隐藏，用户不能打卡
-  if (!inPeriod) {
-    return !hideInactivePlans;
-  }
-  
-  // 对于 once 且尚未完成（无任何打卡），依旧显示
-  if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
-    return true;
-  }
-  
-  if (p.frequency === 'once' && isPunchDoneToday(p)) {
-    return !hideInactivePlans;
-  }
-  
-  return true;
 }
 
 let dragStartX = 0, dragStartY = 0, dragStartElement = null, dragStartIndex = -1, isDraggingCard = false;
@@ -1712,7 +1713,6 @@ function getTimerBottomHTML(p) {
     const maxPunches = todayRecord.maxPunches || p.dailyTimes || 1;
     const isDoneToday = isPunchDoneToday(p);
     const streakInfo = calculateStreak(p);
-    // 对于单次计划且已永久结束（历史上任何一天完成且未被恢复），显示已结束样式
     const isOnceEnded = (p.frequency === 'once' && isPlanActuallyEnded(p));
 
     if (isOnceEnded) {
@@ -1925,13 +1925,10 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
-  // ========== 修改点：保持原始顺序的分组排序 ==========
-  // 未完成组（未打卡且未计时）在前，已完成/已计时组在后，两组内部均保持 punches 数组的原始顺序
-  const activeCards = [];    // 未完成组
-  const completedCards = []; // 已完成/已计时组
+  const activeCards = [];    
+  const completedCards = []; 
   
   for (const p of punches) {
-    // 过滤掉在隐藏非周期计划模式下不应显示的卡片（与原逻辑一致）
     if (!shouldShowPunch(p) && hideInactivePlans) {
       continue;
     }
@@ -1943,9 +1940,7 @@ async function renderPunchList(forceRender = false) {
       activeCards.push(p);
     }
   }
-  // 最终顺序：未完成组（原序） + 已完成组（原序）
   const sorted = [...activeCards, ...completedCards];
-  // ==================================================
   
   for (const p of sorted) {
     const streakInfo = calculateStreak(p);
@@ -2034,7 +2029,6 @@ async function renderPunchList(forceRender = false) {
       }
     }
     
-    // ========== 修改点：删除卡片时同步删除所有关联的计时记录（所有日期） ==========
     li.querySelector('.delete-btn').onclick = function(e) {
       e.stopPropagation();
       e.preventDefault();
@@ -2043,14 +2037,12 @@ async function renderPunchList(forceRender = false) {
         if (p.timerInterval) {
           clearInterval(p.timerInterval);
         }
-        // 删除与这张卡片关联的所有计时记录（所有日期）
         const allTimerIds = timerSessions.filter(s => s.name === p.name).map(s => s.id);
         if (allTimerIds.length) {
             deleteTimerSessions(allTimerIds);
         }
         punches.splice(originalIndex, 1);
         saveAndRender();
-        // 如果当前显示时间页面，强制刷新计时列表（同步清理历史计时）
         if (timeSection && timeSection.classList.contains('active')) {
           renderTimeSummaryForDate(currentTimeViewDate);
         }
@@ -2088,7 +2080,6 @@ async function renderPunchList(forceRender = false) {
 
         const today = getTodayDateString();
 
-        // 单次计划恢复逻辑：如果单次计划已结束（历史有完成记录且未被恢复），询问恢复
         if (p.frequency === 'once' && !isDoneToday && !p.timed && isPlanActuallyEnded(p)) {
             if (confirm("确定要恢复该计划吗？")) {
                 p.forceActive = true;
@@ -2195,7 +2186,6 @@ async function renderPunchList(forceRender = false) {
               punches: 1,
               maxPunches: p.dailyTimes || 1
             };
-            // 单次计时打卡，如果恢复了需要清除forceActive
             if (p.frequency === 'once' && p.forceActive === true) {
                 p.forceActive = false;
             }
@@ -2247,7 +2237,6 @@ async function renderPunchList(forceRender = false) {
               if (p.history[today].punches >= (p.history[today].maxPunches || p.dailyTimes || 1)) {
                 p.history[today].checked = true;
                 p.history[today].checkedTime = getCurrentTimeString();
-                // 单次计划多打卡情况
                 if (p.frequency === 'once' && p.forceActive === true) {
                     p.forceActive = false;
                 }
@@ -2274,7 +2263,6 @@ async function renderPunchList(forceRender = false) {
               p.history[today].checkedTime = getCurrentTimeString();
 
               playPunchSound();
-              // 单次计划完成打卡后，如果处于恢复状态则需要清除强制活跃标志
               if (p.frequency === 'once' && p.forceActive === true) {
                   p.forceActive = false;
               }
@@ -6645,9 +6633,7 @@ function resetAllPeriodicPlans() {
   const todayStart = getTodayStart();
 
   punches.forEach(p => {
-    // 单次计划恢复后（forceActive为true）不重置打卡状态，保留历史记录但允许打卡
     if (p.frequency === 'once' && p.forceActive === true) return;
-    // 跳过单次计划且已经永久结束的卡片，避免重置为未打卡
     if (p.frequency === 'once' && hasAnyCompletedCheckForOnce(p)) {
       return;
     }
