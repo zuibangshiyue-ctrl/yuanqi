@@ -127,7 +127,7 @@
           <div class="page-card" id="pageCard">
             <div class="journal-header">
               <span class="page-number" id="pageNumDisplay">第 1 页</span>
-              <span class="last-edited" id="lastEditedTime"><i class="far fa-clock"></i> 刚刚</span>
+              <!-- 右上角的时间显示已移除 -->
             </div>
             <input type="text" class="diary-title" id="diaryTitle" placeholder="日记标题 · 此刻心情" autocomplete="off">
             <textarea class="diary-content" id="diaryContent" placeholder="写下今天的故事、灵感或心事……&#10;每一页都值得珍藏。"></textarea>
@@ -146,7 +146,7 @@
             </div>
           </div>
 
-          <!-- 底部操作栏 -->
+          <!-- 底部操作栏（已移除字体选择器） -->
           <div class="action-bar">
             <button class="nav-btn back-shelf-btn" id="backToShelfBtn"><i class="fas fa-arrow-left"></i></button>
             <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-left"></i></button>
@@ -154,10 +154,6 @@
             <div class="page-indicator"><i class="fas fa-book-open"></i> <span id="pageCounter">1 / 1</span></div>
             <button class="nav-btn" id="deletePageBtn"><i class="fas fa-trash-alt"></i></button>
             <button class="nav-btn" id="nextPageBtn"><i class="fas fa-chevron-right"></i></button>
-            <select id="fontSelect" class="font-selector">
-              <option value="default">📝 默认</option>
-              <option value="mashanzheng">✍️ 马善政毛笔楷书</option>
-            </select>
           </div>
         </div>
       </div>
@@ -683,7 +679,10 @@
   <div class="modal-content">
     <div class="modal-header">
       <h3 id="edit-timer-modal-title">修改计时记录</h3>
-      <button id="close-edit-timer" class="close-btn">&times;</button>
+      <div style="display: flex; gap: 8px;">
+        <button id="delete-timer-record-header" class="header-delete-btn" title="删除记录"><i class="fas fa-trash-alt"></i></button>
+        <button id="close-edit-timer" class="close-btn">&times;</button>
+      </div>
     </div>
     <div class="modal-body">
       <div class="form-group time-row" style="flex-direction: column; gap: 16px;">
@@ -728,7 +727,6 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button id="delete-timer-record" class="danger-btn">删除记录</button>
       <button id="save-timer-record" class="primary-btn">保存修改</button>
     </div>
   </div>
