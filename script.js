@@ -1,4 +1,4 @@
-// 元气打卡完整版 JS (包含单次计划恢复功能：已结束的单次计划可恢复，保留历史记录)
+// 元气打卡完整版 JS (已移除计时器卡片三击重置功能)
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -122,10 +122,9 @@ const CACHE_LIMIT = 100;
 
 const imageCache = new Map();
 
-// 辅助函数：判断单次计划是否真正结束（既有历史完成记录且未被恢复）
 function isPlanActuallyEnded(p) {
     if (p.frequency !== 'once') return false;
-    if (p.forceActive === true) return false; // 恢复状态下视为未结束
+    if (p.forceActive === true) return false;
     return hasAnyCompletedCheckForOnce(p);
 }
 
@@ -829,7 +828,7 @@ function generateParentId() {
   return 'parent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-function splitTimerRangeIntoDays(startTime, endTime, punchName, parentId) {
+function splitTimerRangeIntoDays(startTime, endTime, cardId, punchName, parentId) {
   const sessions = [];
   let currentStart = new Date(startTime);
   const finalEnd = new Date(endTime);
@@ -847,6 +846,7 @@ function splitTimerRangeIntoDays(startTime, endTime, punchName, parentId) {
     sessions.push({
       id: 'ts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) + '_' + sessions.length,
       parentId: parentId,
+      cardId: cardId,
       date: dateStr,
       name: punchName,
       startHour: currentStart.getHours(),
@@ -866,15 +866,15 @@ function splitTimerRangeIntoDays(startTime, endTime, punchName, parentId) {
   return sessions;
 }
 
-function addTimerSessions(startTime, endTime, punchName) {
+function addTimerSessions(startTime, endTime, cardId, punchName) {
   const parentId = generateParentId();
-  const sessions = splitTimerRangeIntoDays(startTime, endTime, punchName, parentId);
+  const sessions = splitTimerRangeIntoDays(startTime, endTime, cardId, punchName, parentId);
   timerSessions.push(...sessions);
   localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
   
   const affectedDates = [...new Set(sessions.map(s => s.date))];
   affectedDates.forEach(date => {
-    updatePunchStatusFromSessions(punchName, date);
+    updatePunchStatusFromSessions(cardId, date);
   });
   
   return sessions;
@@ -884,20 +884,20 @@ function deleteTimerSessionsByParentId(parentId) {
   const toRemove = timerSessions.filter(s => s.parentId === parentId).map(s => s.id);
   if (toRemove.length === 0) return false;
   
-  const affected = new Map(); // name -> Set of dates
+  const affected = new Map(); // cardId -> Set of dates
   timerSessions.forEach(s => {
     if (s.parentId === parentId) {
-      if (!affected.has(s.name)) affected.set(s.name, new Set());
-      affected.get(s.name).add(s.date);
+      if (!affected.has(s.cardId)) affected.set(s.cardId, new Set());
+      affected.get(s.cardId).add(s.date);
     }
   });
   
   timerSessions = timerSessions.filter(s => s.parentId !== parentId);
   localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
   
-  for (let [name, dates] of affected.entries()) {
+  for (let [cardId, dates] of affected.entries()) {
     dates.forEach(date => {
-      updatePunchStatusFromSessions(name, date);
+      updatePunchStatusFromSessions(cardId, date);
     });
   }
   return true;
@@ -905,25 +905,25 @@ function deleteTimerSessionsByParentId(parentId) {
 
 function deleteTimerSessions(sessionIds) {
   const sessionsToDelete = timerSessions.filter(s => sessionIds.includes(s.id));
-  const affected = new Map(); // name -> Set of dates
+  const affected = new Map();
   sessionsToDelete.forEach(s => {
-    if (!affected.has(s.name)) affected.set(s.name, new Set());
-    affected.get(s.name).add(s.date);
+    if (!affected.has(s.cardId)) affected.set(s.cardId, new Set());
+    affected.get(s.cardId).add(s.date);
   });
   
   timerSessions = timerSessions.filter(s => !sessionIds.includes(s.id));
   localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
   
-  for (let [name, dates] of affected.entries()) {
+  for (let [cardId, dates] of affected.entries()) {
     dates.forEach(date => {
-      updatePunchStatusFromSessions(name, date);
+      updatePunchStatusFromSessions(cardId, date);
     });
   }
 }
 
-function modifyTimerSessions(oldParentId, newStartTime, newEndTime, newPunchName) {
+function modifyTimerSessions(oldParentId, newStartTime, newEndTime, newCardId, newPunchName) {
   deleteTimerSessionsByParentId(oldParentId);
-  return addTimerSessions(newStartTime, newEndTime, newPunchName);
+  return addTimerSessions(newStartTime, newEndTime, newCardId, newPunchName);
 }
 
 function migrateCrossDaySessions() {
@@ -947,26 +947,26 @@ function migrateCrossDaySessions() {
   }
 }
 
-function recordTimerSession(punchName, startTime, endTime, duration) {
-  addTimerSessions(startTime, endTime, punchName);
+function recordTimerSession(cardId, punchName, startTime, endTime, duration) {
+  addTimerSessions(startTime, endTime, cardId, punchName);
 }
 
-function removeTimerSessionsForToday(punchName) {
+function removeTimerSessionsForToday(cardId, punchName) {
   const today = getTodayDateString();
-  const toRemove = timerSessions.filter(s => s.date === today && s.name === punchName).map(s => s.parentId);
+  const toRemove = timerSessions.filter(s => s.date === today && s.cardId === cardId).map(s => s.parentId);
   [...new Set(toRemove)].forEach(pid => deleteTimerSessionsByParentId(pid));
 }
 
-function removeTimerSessionsForDate(punchName, date) {
-  const toRemove = timerSessions.filter(s => s.date === date && s.name === punchName).map(s => s.parentId);
+function removeTimerSessionsForDate(cardId, date) {
+  const toRemove = timerSessions.filter(s => s.date === date && s.cardId === cardId).map(s => s.parentId);
   [...new Set(toRemove)].forEach(pid => deleteTimerSessionsByParentId(pid));
 }
 
-function removeTodayTimerSessionsByCardName(cardName, targetDateStr) {
-    const toRemoveIds = timerSessions.filter(s => s.name === cardName && s.date === targetDateStr).map(s => s.id);
+function removeTodayTimerSessionsByCardName(cardId, targetDateStr) {
+    const toRemoveIds = timerSessions.filter(s => s.cardId === cardId && s.date === targetDateStr).map(s => s.id);
     if (toRemoveIds.length) {
         deleteTimerSessions(toRemoveIds);
-        console.log(`已删除卡片「${cardName}」在 ${targetDateStr} 的计时记录，共 ${toRemoveIds.length} 条`);
+        console.log(`已删除卡片「${cardId}」在 ${targetDateStr} 的计时记录，共 ${toRemoveIds.length} 条`);
     }
 }
 
@@ -1018,7 +1018,6 @@ function initPunchHistory(punch) {
   }
 }
 
-// ---- 单次计划辅助函数：检查历史上是否有任何已打卡记录 ----
 function hasAnyCompletedCheckForOnce(punch) {
   if (punch.frequency !== 'once') return false;
   if (!punch.history) return false;
@@ -1120,7 +1119,7 @@ function checkCountdownCompletion(p) {
         if (p.timer.startTime) {
           const startTime = new Date(p.timer.startTime);
           const endTime = new Date();
-          recordTimerSession(p.name, startTime, endTime, elapsed);
+          recordTimerSession(p.id, p.name, startTime, endTime, elapsed);
         }
         
         p.timed = true;
@@ -1286,34 +1285,6 @@ function saveToLocalStorage() {
   }
 }
 
-/**
- * 判断一个卡片是否应显示在打卡列表中（核心修复点）
- * 当“隐藏非周期计划”关闭时（hideInactivePlans = false），无条件显示所有卡片。
- * 当开启隐藏时，只显示当前处于周期内、或未完成的单次计划等。
- */
-function shouldShowPunch(p) {
-  // 若用户关闭了隐藏非周期计划，则所有卡片一律显示
-  if (!hideInactivePlans) {
-    return true;
-  }
-
-  // 以下为 hideInactivePlans = true 时的原始严格逻辑
-  const inPeriod = isInCurrentPeriod(p);
-  if (!inPeriod) {
-    return false;
-  }
-  
-  if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
-    return true;
-  }
-  
-  if (p.frequency === 'once' && isPunchDoneToday(p)) {
-    return false;
-  }
-  
-  return true;
-}
-
 function isInCurrentPeriod(p) {
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -1329,10 +1300,6 @@ function isInCurrentPeriod(p) {
       return false;
     }
     return true;
-  }
-  
-  if (p.frequency === 'once' && todayRecord && todayRecord.checked) {
-    return false;
   }
   
   switch(p.frequency) {
@@ -1460,6 +1427,23 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
     const nthTargetDay = targetDays[weekNumber - 1];
     return nthTargetDay && day === nthTargetDay.getDate();
   }
+}
+
+function shouldShowPunch(p) {
+  const inPeriod = isInCurrentPeriod(p);
+  if (!inPeriod) {
+    return !hideInactivePlans;
+  }
+  
+  if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
+    return true;
+  }
+  
+  if (p.frequency === 'once' && isPunchDoneToday(p)) {
+    return !hideInactivePlans;
+  }
+  
+  return true;
 }
 
 let dragStartX = 0, dragStartY = 0, dragStartElement = null, dragStartIndex = -1, isDraggingCard = false;
@@ -1921,17 +1905,26 @@ async function renderPunchList(forceRender = false) {
     list.innerHTML = '';
   }
   
+  // 确保每个卡片都有每日初始记录
   punches.forEach(p => {
     initPunchHistory(p);
   });
   
-  const activeCards = [];    
-  const completedCards = []; 
+  // 收集将要显示的卡片
+  let cardsToRender = [];
+  if (hideInactivePlans === true) {
+    // 隐藏非周期计划：按原逻辑过滤
+    cardsToRender = punches.filter(p => shouldShowPunch(p));
+  } else {
+    // 关闭隐藏：显示所有卡片，不论是否在当前周期内 (保证周期性卡片在非周期日也可见)
+    cardsToRender = [...punches];
+  }
   
-  for (const p of punches) {
-    if (!shouldShowPunch(p) && hideInactivePlans) {
-      continue;
-    }
+  // 原有的分类排序逻辑：未完成组 + 已完成组（保持原交互）
+  const activeCards = [];
+  const completedCards = [];
+  
+  for (const p of cardsToRender) {
     const isDone = isPunchDoneToday(p);
     const isTimed = p.timed === true;
     if (isDone || isTimed) {
@@ -2037,7 +2030,7 @@ async function renderPunchList(forceRender = false) {
         if (p.timerInterval) {
           clearInterval(p.timerInterval);
         }
-        const allTimerIds = timerSessions.filter(s => s.name === p.name).map(s => s.id);
+        const allTimerIds = timerSessions.filter(s => s.cardId === p.id).map(s => s.id);
         if (allTimerIds.length) {
             deleteTimerSessions(allTimerIds);
         }
@@ -2118,7 +2111,7 @@ async function renderPunchList(forceRender = false) {
             p.timed = false;
 
             if (p.enableTimer) {
-              removeTimerSessionsForToday(p.name);
+              removeTimerSessionsForToday(p.id, p.name);
             }
 
             initPunchHistory(p);
@@ -2173,7 +2166,7 @@ async function renderPunchList(forceRender = false) {
               const startTime = new Date(p.timer.startTime);
               const endTime = new Date();
               const duration = p.timer.elapsed || (Date.now() - p.timer.startTime);
-              recordTimerSession(p.name, startTime, endTime, duration);
+              recordTimerSession(p.id, p.name, startTime, endTime, duration);
             }
             
             p.timer = null;
@@ -2192,29 +2185,8 @@ async function renderPunchList(forceRender = false) {
             playPunchSound();
             
             saveAndRender();
-          } else if (clickCount >= 3) {
-            if (p.timerInterval) {
-              clearInterval(p.timerInterval);
-            }
-            p.timer = null;
-            p.timerStatus = 'init';
-            p.paused = false;
-
-            if (p.timed) {
-              removeTimerSessionsForToday(p.name);
-            }
-
-            initPunchHistory(p);
-            p.history[today] = {
-              checked: false,
-              checkedTime: null,
-              lastUpdate: getCurrentTimeString(),
-              punches: 0,
-              maxPunches: p.dailyTimes || 1
-            };
-
-            saveAndRender();
           }
+          // 三击重置功能已移除
         } 
         else {
           const today = getTodayDateString();
@@ -2999,10 +2971,7 @@ function initCountdownInputs() {
 }
 
 function isPlanNameDuplicate(name, currentEditingId = null) {
-  const trimmedName = name.trim();
-  if (!trimmedName) return false;
-  const exists = punches.some(p => p.name === trimmedName && (currentEditingId === null || p.id !== currentEditingId));
-  return exists;
+  return false;
 }
 
 if (savePlanBtn) {
@@ -3016,10 +2985,6 @@ if (savePlanBtn) {
     }
 
     const currentId = (editingIndex !== null && punches[editingIndex]) ? punches[editingIndex].id : null;
-    if (isPlanNameDuplicate(name, currentId)) {
-      showToast('卡片名称已存在');
-      return;
-    }
 
     const today = getTodayDateString();
 
@@ -3168,10 +3133,6 @@ if (endPlanBtn) {
     }
 
     const currentId = (editingIndex !== null && punches[editingIndex]) ? punches[editingIndex].id : null;
-    if (isPlanNameDuplicate(name, currentId)) {
-      showToast('卡片名称已存在');
-      return;
-    }
 
     if (!confirm('确定要结束这个计划吗？结束后将无法再打卡，但历史记录会保留。')) {
       return;
@@ -3910,7 +3871,7 @@ function undoPunch(itemIndex, dateString) {
       dayRecord.lastUpdate = getCurrentTimeString();
 
       if (dayRecord.isTimed) {
-        removeTimerSessionsForDate(punch.name, dateString);
+        removeTimerSessionsForDate(punch.id, dateString);
       }
 
       saveAndRender();
@@ -3926,8 +3887,8 @@ function undoPunch(itemIndex, dateString) {
   }
 }
 
-function removeTimerSessionsForDate(punchName, date) {
-  const toRemove = timerSessions.filter(s => s.date === date && s.name === punchName).map(s => s.parentId);
+function removeTimerSessionsForDate(cardId, date) {
+  const toRemove = timerSessions.filter(s => s.date === date && s.cardId === cardId).map(s => s.parentId);
   [...new Set(toRemove)].forEach(pid => deleteTimerSessionsByParentId(pid));
 }
 
@@ -4003,7 +3964,7 @@ function initYearMonthPicker() {
   }
 }
 
-function renderCardCapsules(containerId, selectedCardName = null, isAddMode = false) {
+function renderCardCapsules(containerId, selectedCardId = null, isAddMode = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
   
@@ -4029,19 +3990,23 @@ function renderCardCapsules(containerId, selectedCardName = null, isAddMode = fa
     }
   }
   
-  const uniqueCardNames = [...new Set(punches.map(p => p.name))];
-  
-  uniqueCardNames.forEach(name => {
+  punches.forEach(punch => {
     const capsule = document.createElement('div');
     capsule.className = 'card-capsule';
-    capsule.dataset.cardName = name;
-    capsule.textContent = name;
+    capsule.dataset.cardId = punch.id;
+    capsule.dataset.cardName = punch.name;
+    const sameNameCount = punches.filter(p => p.name === punch.name).length;
+    let displayName = punch.name;
+    if (sameNameCount > 1) {
+      displayName = `${punch.name} (${punch.id.slice(-4)})`;
+    }
+    capsule.textContent = displayName;
     
-    const color = getFixedColorForCard(name);
+    const color = getFixedColorForCard(punch.name);
     capsule.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.2)`;
     capsule.style.borderColor = color;
     
-    if (selectedCardName === name) {
+    if (selectedCardId === punch.id) {
       capsule.classList.add('selected');
       capsule.style.backgroundColor = color;
       capsule.style.color = '#fff';
@@ -4050,7 +4015,8 @@ function renderCardCapsules(containerId, selectedCardName = null, isAddMode = fa
     capsule.addEventListener('click', function(e) {
       container.querySelectorAll('.card-capsule').forEach(c => {
         c.classList.remove('selected');
-        const origColor = getFixedColorForCard(c.dataset.cardName);
+        const origName = c.dataset.cardName;
+        const origColor = getFixedColorForCard(origName);
         c.style.backgroundColor = `rgba(${hexToRgb(origColor)}, 0.2)`;
         c.style.color = '#333';
       });
@@ -4363,8 +4329,8 @@ function openAddTimerModal(startHour = 0, startMinute = 0, endHour = 0, endMinut
   updateAddModalDateValues(startDateObj, endDateObj, displayStartHour, displayStartMinute, displayEndHour, displayEndMinute);
   addTimeWarning.style.display = 'none';
   
-  let defaultCard = punches.length > 0 ? punches[0].name : null;
-  renderCardCapsules('add-card-capsule-container', defaultCard, true);
+  let defaultCardId = punches.length > 0 ? punches[0].id : null;
+  renderCardCapsules('add-card-capsule-container', defaultCardId, true);
   
   if (addTimerModal) {
     addTimerModal.style.display = 'flex';
@@ -4372,7 +4338,7 @@ function openAddTimerModal(startHour = 0, startMinute = 0, endHour = 0, endMinut
 }
 
 function openEditTimerModal(sessionOrParentId, sessionsList) {
-  let parentId, startDateObj, endDateObj, cardName;
+  let parentId, startDateObj, endDateObj, cardId;
   
   if (typeof sessionOrParentId === 'string') {
     parentId = sessionOrParentId;
@@ -4383,7 +4349,7 @@ function openEditTimerModal(sessionOrParentId, sessionsList) {
     const last = sorted[sorted.length-1];
     startDateObj = new Date(first.date + 'T' + formatTime(first.startHour, first.startMinute));
     endDateObj = new Date(last.date + 'T' + formatTime(last.endHour, last.endMinute));
-    cardName = first.name;
+    cardId = first.cardId;
   } else if (sessionOrParentId && sessionOrParentId.id) {
     const s = sessionOrParentId;
     parentId = s.parentId || s.id;
@@ -4392,7 +4358,7 @@ function openEditTimerModal(sessionOrParentId, sessionsList) {
     if (endDateObj < startDateObj) {
       endDateObj.setDate(endDateObj.getDate() + 1);
     }
-    cardName = s.name;
+    cardId = s.cardId;
   } else {
     return;
   }
@@ -4406,16 +4372,16 @@ function openEditTimerModal(sessionOrParentId, sessionsList) {
   
   updateEditModalDateValues(startDateObj, endDateObj, startDateObj.getHours(), startDateObj.getMinutes(), displayEndHour, displayEndMinute);
   currentEditingParentId = parentId;
-  renderCardCapsules('edit-card-capsule-container', cardName, false);
+  renderCardCapsules('edit-card-capsule-container', cardId, false);
   editTimerModal.style.display = 'flex';
   editTimeWarning.style.display = 'none';
 }
 
-function updatePunchStatusFromSessions(cardName, date) {
-  const punchesToUpdate = punches.filter(p => p.name === cardName);
+function updatePunchStatusFromSessions(cardId, date) {
+  const punchesToUpdate = punches.filter(p => p.id === cardId);
   if (punchesToUpdate.length === 0) return;
 
-  const sessionsForCard = timerSessions.filter(s => s.date === date && s.name === cardName);
+  const sessionsForCard = timerSessions.filter(s => s.date === date && s.cardId === cardId);
   const hasSessions = sessionsForCard.length > 0;
 
   punchesToUpdate.forEach(punch => {
@@ -4508,9 +4474,10 @@ function saveNewTimerRecord() {
     addTimeWarning.style.display = 'block';
     return;
   }
+  const cardId = selectedCapsule.dataset.cardId;
   const cardName = selectedCapsule.dataset.cardName;
   
-  addTimerSessions(startDateTime, endDateTime, cardName);
+  addTimerSessions(startDateTime, endDateTime, cardId, cardName);
   
   saveToLocalStorage();
   
@@ -4578,9 +4545,10 @@ if (saveTimerRecordBtn) {
       editTimeWarning.style.display = 'block';
       return;
     }
+    const newCardId = selectedCapsule.dataset.cardId;
     const newCardName = selectedCapsule.dataset.cardName;
     
-    modifyTimerSessions(currentEditingParentId, startDateTime, endDateTime, newCardName);
+    modifyTimerSessions(currentEditingParentId, startDateTime, endDateTime, newCardId, newCardName);
     
     saveToLocalStorage();
     
@@ -5684,7 +5652,7 @@ function tomatoComplete() {
       const startTime = new Date(currentTomatoPunch.timer.startTime);
       const endTime = new Date();
       const duration = currentTomatoPunch.timer.elapsed || (Date.now() - currentTomatoPunch.timer.startTime);
-      recordTimerSession(currentTomatoPunch.name, startTime, endTime, duration);
+      recordTimerSession(currentTomatoPunch.id, currentTomatoPunch.name, startTime, endTime, duration);
     }
     currentTomatoPunch.timed = true;
     currentTomatoPunch.timerStatus = 'init';
@@ -6554,13 +6522,26 @@ async function initApp() {
     const storedSessions = localStorage.getItem('timerSessions');
     if (storedSessions) {
       timerSessions = JSON.parse(storedSessions);
+      let migrated = false;
       timerSessions = timerSessions.map(s => {
         if (!s.id) {
           s.id = 'ts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
+        if (!s.cardId) {
+          const matchedPunch = punches.find(p => p.name === s.name);
+          if (matchedPunch) {
+            s.cardId = matchedPunch.id;
+          } else {
+            s.cardId = null;
+          }
+          migrated = true;
+        }
         return s;
       });
-      localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
+      if (migrated) {
+        localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
+        console.log('已为计时记录添加 cardId 字段');
+      }
       console.log('加载计时器时间段数据:', timerSessions.length);
       
       migrateCrossDaySessions();
@@ -6680,3 +6661,190 @@ document.addEventListener('contextmenu', function(e) {
     }
     e.preventDefault();
 });
+
+// ================== 键盘空白区域修复 ==================
+(function fixKeyboardBlankSpace() {
+    // 获取当前活动的滚动区域
+    function getCurrentScrollContainer() {
+        if (punchSection && punchSection.classList.contains('active')) return punchSection;
+        if (timeSection && timeSection.classList.contains('active')) return timeSection;
+        if (calendarSection && calendarSection.classList.contains('active')) return calendarSection;
+        if (journalSection && journalSection.classList.contains('active')) {
+            // 日记本内，如果笔记本视图打开则重置 notebook 内部，否则重置书架
+            if (notebookView && notebookView.style.display === 'block') {
+                return document.querySelector('#journal-section .notebook-view');
+            }
+            return bookshelfView;
+        }
+        return null;
+    }
+
+    // 重置滚动位置到顶部 & 移除残留空白
+    function resetScrollPosition() {
+        const container = getCurrentScrollContainer();
+        if (container && typeof container.scrollTop === 'number') {
+            container.scrollTop = 0;
+        }
+        // 额外确保 main 区域没有偏移
+        const mainElem = document.querySelector('main');
+        if (mainElem && typeof mainElem.scrollTop === 'number') {
+            mainElem.scrollTop = 0;
+        }
+        // 防止 body 残留滚动
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+
+    // 收起键盘（让当前焦点元素失去焦点）
+    function dismissKeyboard() {
+        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) {
+            document.activeElement.blur();
+        }
+    }
+
+    // 修复函数：收起键盘 + 重置滚动
+    function fixBlankSpace() {
+        dismissKeyboard();
+        // 延迟重置，等待键盘完全收起和页面重新布局
+        setTimeout(resetScrollPosition, 50);
+        setTimeout(resetScrollPosition, 200);
+    }
+
+    // 监听窗口 resize 事件，检测键盘收起（视口高度变大）
+    let lastInnerHeight = window.innerHeight;
+    window.addEventListener('resize', function() {
+        if (window.innerHeight > lastInnerHeight) {
+            // 视口高度增大，说明键盘收起，执行修复
+            fixBlankSpace();
+        }
+        lastInnerHeight = window.innerHeight;
+    });
+
+    // 监听焦点失去事件（输入框失焦时重置）
+    document.addEventListener('focusout', function(e) {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+            fixBlankSpace();
+        }
+    });
+
+    // 拦截底部导航栏点击，修复空白
+    const originalNavPunchClick = navPunch ? navPunch.onclick : null;
+    const originalNavTimeClick = navTime ? navTime.onclick : null;
+    const originalNavCalendarClick = navCalendar ? navCalendar.onclick : null;
+    const originalNavJournalClick = navJournal ? navJournal.onclick : null;
+
+    function wrapNavClick(originalFn, e) {
+        fixBlankSpace();
+        if (originalFn) originalFn(e);
+        // 渲染后再次确保滚动重置
+        setTimeout(resetScrollPosition, 100);
+    }
+
+    if (navPunch) navPunch.onclick = (e) => wrapNavClick(originalNavPunchClick, e);
+    if (navTime) navTime.onclick = (e) => wrapNavClick(originalNavTimeClick, e);
+    if (navCalendar) navCalendar.onclick = (e) => wrapNavClick(originalNavCalendarClick, e);
+    if (navJournal) navJournal.onclick = (e) => wrapNavClick(originalNavJournalClick, e);
+
+    // 顶部“今日”按钮修复
+    const todayBtn = document.getElementById('today-header-btn');
+    if (todayBtn) {
+        const originalTodayClick = todayBtn.onclick;
+        todayBtn.onclick = (e) => {
+            fixBlankSpace();
+            if (originalTodayClick) originalTodayClick(e);
+            setTimeout(resetScrollPosition, 100);
+        };
+    }
+
+    // 日记本内所有按钮修复（翻页、新增、删除、返回书架等）
+    const diaryButtons = ['prevPageBtn', 'nextPageBtn', 'addPageBtn', 'deletePageBtn', 'backToShelfBtn'];
+    diaryButtons.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            const originalClick = btn.onclick;
+            btn.onclick = (e) => {
+                fixBlankSpace();
+                if (originalClick) originalClick(e);
+                // 动画后重置滚动
+                setTimeout(resetScrollPosition, 350);
+            };
+        }
+    });
+
+    // 快速滑块滑动结束后修复
+    const slider = document.getElementById('quickPageSlider');
+    if (slider) {
+        slider.addEventListener('change', () => {
+            setTimeout(resetScrollPosition, 300);
+        });
+    }
+
+    // 新增计划页面关闭时修复（关闭键盘）
+    const backToPunch = document.getElementById('back-btn');
+    const savePlan = document.getElementById('save-plan-btn');
+    if (backToPunch) {
+        const originalBack = backToPunch.onclick;
+        backToPunch.onclick = (e) => {
+            fixBlankSpace();
+            if (originalBack) originalBack(e);
+        };
+    }
+    if (savePlan) {
+        const originalSave = savePlan.onclick;
+        savePlan.onclick = (e) => {
+            fixBlankSpace();
+            if (originalSave) originalSave(e);
+        };
+    }
+
+    // 时间视图日期切换时修复
+    const prevTimeBtn = document.getElementById('prev-time-day');
+    const nextTimeBtn = document.getElementById('next-time-day');
+    if (prevTimeBtn) {
+        const originalPrev = prevTimeBtn.onclick;
+        prevTimeBtn.onclick = (e) => {
+            fixBlankSpace();
+            if (originalPrev) originalPrev(e);
+            setTimeout(resetScrollPosition, 150);
+        };
+    }
+    if (nextTimeBtn) {
+        const originalNext = nextTimeBtn.onclick;
+        nextTimeBtn.onclick = (e) => {
+            fixBlankSpace();
+            if (originalNext) originalNext(e);
+            setTimeout(resetScrollPosition, 150);
+        };
+    }
+
+    // 日历月份切换时修复
+    const prevMonth = document.getElementById('prev-month');
+    const nextMonth = document.getElementById('next-month');
+    if (prevMonth) {
+        const originalPrevMonth = prevMonth.onclick;
+        prevMonth.onclick = (e) => {
+            fixBlankSpace();
+            if (originalPrevMonth) originalPrevMonth(e);
+            setTimeout(resetScrollPosition, 150);
+        };
+    }
+    if (nextMonth) {
+        const originalNextMonth = nextMonth.onclick;
+        nextMonth.onclick = (e) => {
+            fixBlankSpace();
+            if (originalNextMonth) originalNextMonth(e);
+            setTimeout(resetScrollPosition, 150);
+        };
+    }
+
+    // 确保对话框关闭后不残留空白
+    const closeModals = ['close-settings', 'close-day-details', 'close-year-month-picker', 'close-date-picker', 'close-backup-modal', 'close-tomato', 'close-edit-timer', 'close-add-timer'];
+    closeModals.forEach(cls => {
+        const btn = document.getElementById(cls);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                setTimeout(resetScrollPosition, 100);
+            });
+        }
+    });
+})();
