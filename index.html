@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<!-- 独立App模式 (PWA) 配置 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="元气打卡">
@@ -11,7 +10,6 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23ff7f50'/%3E%3Ctext x='50' y='67' font-size='50' text-anchor='middle' fill='white'%3E📅%3C/text%3E%3C/svg%3E">
 <title>元气打卡 完整版 · 纸间时光日记</title>
-<!-- Google Fonts: 马善政毛笔楷体 + 原有字体 (日记专用) -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&family=Caveat:wght@400;500;600&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 <link rel="stylesheet" href="style.css">
@@ -34,7 +32,6 @@
       </button>
     </div>
     <button id="today-header-btn" class="today-header-btn" style="display: none;">今</button>
-    <!-- 日记页面新建日记本按钮（图标） -->
     <button id="journal-add-book-btn" class="journal-add-book-btn" style="display: none;">
       <svg class="add-icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22">
         <path d="M512.17594 1023.648121c-29.52585 0-58.347943-6.397801-58.347943-37.395145V564.030115H37.459123c-23.76783 0-37.459123-22.392303-37.459123-51.182406 0-26.614851 10.076536-51.790197 35.187904-51.790198h425.005904V43.888913c0-28.054356 20.888819-43.888913 51.854176-43.888913 28.790103 0 51.182406 12.795602 51.182406 37.395145v416.49683h430.156133c28.790103 0 30.261598 34.516135 30.261598 58.283965s-7.933273 51.182406-36.723376 51.182406H563.326357v422.926619c0.735747 24.40761-21.592578 37.363156-51.150417 37.363156z" fill="#ffffff"></path>
@@ -111,29 +108,24 @@
     </div>
   </section>
 
-  <!-- 日记页面 - 多书架翻页日记本（已去除所有背景文字和装饰） -->
   <section id="journal-section" class="tab-section">
     <div class="journal-multi-container">
-      <!-- 书架视图（已去除背景视图，仅保留卡片网格） -->
       <div class="bookshelf-view" id="bookshelfView">
         <div class="books-grid" id="booksGrid"></div>
         <div id="editModeTip" style="text-align:center; margin-top:1rem; min-height: 0;"></div>
       </div>
 
-      <!-- 日记本视图 -->
       <div class="notebook-view" id="notebookView">
         <div class="notebook">
           <div class="coil-effect"></div>
           <div class="page-card" id="pageCard">
             <div class="journal-header">
               <span class="page-number" id="pageNumDisplay">第 1 页</span>
-              <!-- 右上角的时间显示已移除 -->
             </div>
             <input type="text" class="diary-title" id="diaryTitle" placeholder="日记标题 · 此刻心情" autocomplete="off">
             <textarea class="diary-content" id="diaryContent" placeholder="写下今天的故事、灵感或心事……&#10;每一页都值得珍藏。"></textarea>
           </div>
 
-          <!-- 快速翻页区域 -->
           <div class="quick-page-wrapper">
             <div class="quick-page-container">
               <i class="fas fa-arrows-alt-h" style="font-size:0.7rem; color:#b29a6b;"></i>
@@ -146,7 +138,6 @@
             </div>
           </div>
 
-          <!-- 底部操作栏（已移除字体选择器） -->
           <div class="action-bar">
             <button class="nav-btn back-shelf-btn" id="backToShelfBtn"><i class="fas fa-arrow-left"></i></button>
             <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-left"></i></button>
@@ -185,7 +176,6 @@
           <span class="slider"></span>
         </label>
       </div>
-      <!-- 新增：是否删除日记的选项 -->
       <div class="setting-item">
         <div class="setting-info">
           <h4>同时删除日记数据</h4>
@@ -215,7 +205,6 @@
         <button id="clear-all-data-btn" class="danger-btn">清空记录</button>
       </div>
     </div>
-    <!-- 原确定按钮已移除，设置项自动保存 -->
   </div>
 </div>
 
