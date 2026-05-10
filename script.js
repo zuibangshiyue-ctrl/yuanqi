@@ -1,4 +1,4 @@
-// 元气打卡完整版 JS (已移除计时器卡片三击重置功能)
+// 元气打卡完整版 JS (已修复隐藏非周期计划导致周期卡片次日不显示的问题 + PWA键盘空白修复)
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -1285,6 +1285,7 @@ function saveToLocalStorage() {
   }
 }
 
+// 判断卡片是否在当前周期内（即“应该由计划规则决定是否可打卡”）
 function isInCurrentPeriod(p) {
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -1429,20 +1430,25 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
   }
 }
 
+// 卡片是否应该显示（核心修复）
 function shouldShowPunch(p) {
-  const inPeriod = isInCurrentPeriod(p);
-  if (!inPeriod) {
-    return !hideInactivePlans;
+  // 如果隐藏非周期计划开关关闭 -> 始终显示（无论是否在周期内）
+  if (!hideInactivePlans) {
+    return true;
   }
   
+  // 如果开关打开，则仅显示在当前周期内的卡片
+  const inPeriod = isInCurrentPeriod(p);
+  if (!inPeriod) {
+    return false;
+  }
+  
+  // 对于 single 计划且未完成，也显示在周期内
   if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
     return true;
   }
   
-  if (p.frequency === 'once' && isPunchDoneToday(p)) {
-    return !hideInactivePlans;
-  }
-  
+  // 其他情况：在周期内就显示
   return true;
 }
 
@@ -1905,26 +1911,17 @@ async function renderPunchList(forceRender = false) {
     list.innerHTML = '';
   }
   
-  // 确保每个卡片都有每日初始记录
   punches.forEach(p => {
     initPunchHistory(p);
   });
   
-  // 收集将要显示的卡片
-  let cardsToRender = [];
-  if (hideInactivePlans === true) {
-    // 隐藏非周期计划：按原逻辑过滤
-    cardsToRender = punches.filter(p => shouldShowPunch(p));
-  } else {
-    // 关闭隐藏：显示所有卡片，不论是否在当前周期内 (保证周期性卡片在非周期日也可见)
-    cardsToRender = [...punches];
-  }
+  const activeCards = [];    // 未完成组
+  const completedCards = []; // 已完成/已计时组
   
-  // 原有的分类排序逻辑：未完成组 + 已完成组（保持原交互）
-  const activeCards = [];
-  const completedCards = [];
-  
-  for (const p of cardsToRender) {
+  for (const p of punches) {
+    if (!shouldShowPunch(p)) {
+      continue;
+    }
     const isDone = isPunchDoneToday(p);
     const isTimed = p.timed === true;
     if (isDone || isTimed) {
@@ -2186,7 +2183,6 @@ async function renderPunchList(forceRender = false) {
             
             saveAndRender();
           }
-          // 三击重置功能已移除
         } 
         else {
           const today = getTodayDateString();
@@ -6382,11 +6378,34 @@ function initDataDiary() {
     renderBookshelfUI();
 }
 function bindDiaryEvents() {
-    document.getElementById('prevPageBtn').addEventListener('click', prevPageDiary);
-    document.getElementById('nextPageBtn').addEventListener('click', nextPageDiary);
-    document.getElementById('addPageBtn').addEventListener('click', addNewDiaryPage);
-    document.getElementById('deletePageBtn').addEventListener('click', deleteCurrentPage);
-    document.getElementById('backToShelfBtn').addEventListener('click', closeNotebookDiary);
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const addBtn = document.getElementById('addPageBtn');
+    const delBtn = document.getElementById('deletePageBtn');
+    const backBtn = document.getElementById('backToShelfBtn');
+
+    // 包装原有点击回调，先修复布局
+    if (prevBtn) {
+        const orig = prevBtn.onclick;
+        prevBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else prevPageDiary(); };
+    }
+    if (nextBtn) {
+        const orig = nextBtn.onclick;
+        nextBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else nextPageDiary(); };
+    }
+    if (addBtn) {
+        const orig = addBtn.onclick;
+        addBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else addNewDiaryPage(); };
+    }
+    if (delBtn) {
+        const orig = delBtn.onclick;
+        delBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else deleteCurrentPage(); };
+    }
+    if (backBtn) {
+        const orig = backBtn.onclick;
+        backBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else closeNotebookDiary(); };
+    }
+
     initQuickSlider();
     window.addEventListener('keydown', (e) => {
         if (notebookView.style.display !== 'block') return;
@@ -6662,189 +6681,85 @@ document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
 
-// ================== 键盘空白区域修复 ==================
-(function fixKeyboardBlankSpace() {
-    // 获取当前活动的滚动区域
-    function getCurrentScrollContainer() {
-        if (punchSection && punchSection.classList.contains('active')) return punchSection;
-        if (timeSection && timeSection.classList.contains('active')) return timeSection;
-        if (calendarSection && calendarSection.classList.contains('active')) return calendarSection;
-        if (journalSection && journalSection.classList.contains('active')) {
-            // 日记本内，如果笔记本视图打开则重置 notebook 内部，否则重置书架
-            if (notebookView && notebookView.style.display === 'block') {
-                return document.querySelector('#journal-section .notebook-view');
-            }
-            return bookshelfView;
+// ======================= PWA 键盘空白修复补丁（增强版，同时修复日记按钮） =======================
+(function() {
+    // 强制重绘布局，消除键盘残留空白 - 暴露为全局函数
+    window.fixKeyboardLayout = function() {
+        const navbar = document.getElementById('navbar');
+        if (navbar) {
+            navbar.style.transform = 'translateZ(0)';
+            setTimeout(() => { if (navbar) navbar.style.transform = ''; }, 30);
         }
-        return null;
-    }
-
-    // 重置滚动位置到顶部 & 移除残留空白
-    function resetScrollPosition() {
-        const container = getCurrentScrollContainer();
-        if (container && typeof container.scrollTop === 'number') {
-            container.scrollTop = 0;
-        }
-        // 额外确保 main 区域没有偏移
-        const mainElem = document.querySelector('main');
-        if (mainElem && typeof mainElem.scrollTop === 'number') {
-            mainElem.scrollTop = 0;
-        }
-        // 防止 body 残留滚动
+        window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
-    }
+        const tmp = document.createElement('div');
+        tmp.style.height = '1px';
+        tmp.style.opacity = '0';
+        document.body.appendChild(tmp);
+        requestAnimationFrame(() => tmp.remove());
+    };
 
-    // 收起键盘（让当前焦点元素失去焦点）
-    function dismissKeyboard() {
-        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) {
-            document.activeElement.blur();
+    let lastViewportHeight = window.innerHeight;
+    const onPotentialKeyboardHide = () => {
+        const currentHeight = window.innerHeight;
+        if (currentHeight - lastViewportHeight > 100) {
+            window.fixKeyboardLayout();
         }
-    }
+        lastViewportHeight = currentHeight;
+    };
 
-    // 修复函数：收起键盘 + 重置滚动
-    function fixBlankSpace() {
-        dismissKeyboard();
-        // 延迟重置，等待键盘完全收起和页面重新布局
-        setTimeout(resetScrollPosition, 50);
-        setTimeout(resetScrollPosition, 200);
-    }
-
-    // 监听窗口 resize 事件，检测键盘收起（视口高度变大）
-    let lastInnerHeight = window.innerHeight;
-    window.addEventListener('resize', function() {
-        if (window.innerHeight > lastInnerHeight) {
-            // 视口高度增大，说明键盘收起，执行修复
-            fixBlankSpace();
+    const initKeyboardListeners = () => {
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', onPotentialKeyboardHide);
+        } else {
+            window.addEventListener('resize', onPotentialKeyboardHide);
         }
-        lastInnerHeight = window.innerHeight;
-    });
-
-    // 监听焦点失去事件（输入框失焦时重置）
-    document.addEventListener('focusout', function(e) {
-        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-            fixBlankSpace();
-        }
-    });
-
-    // 拦截底部导航栏点击，修复空白
-    const originalNavPunchClick = navPunch ? navPunch.onclick : null;
-    const originalNavTimeClick = navTime ? navTime.onclick : null;
-    const originalNavCalendarClick = navCalendar ? navCalendar.onclick : null;
-    const originalNavJournalClick = navJournal ? navJournal.onclick : null;
-
-    function wrapNavClick(originalFn, e) {
-        fixBlankSpace();
-        if (originalFn) originalFn(e);
-        // 渲染后再次确保滚动重置
-        setTimeout(resetScrollPosition, 100);
-    }
-
-    if (navPunch) navPunch.onclick = (e) => wrapNavClick(originalNavPunchClick, e);
-    if (navTime) navTime.onclick = (e) => wrapNavClick(originalNavTimeClick, e);
-    if (navCalendar) navCalendar.onclick = (e) => wrapNavClick(originalNavCalendarClick, e);
-    if (navJournal) navJournal.onclick = (e) => wrapNavClick(originalNavJournalClick, e);
-
-    // 顶部“今日”按钮修复
-    const todayBtn = document.getElementById('today-header-btn');
-    if (todayBtn) {
-        const originalTodayClick = todayBtn.onclick;
-        todayBtn.onclick = (e) => {
-            fixBlankSpace();
-            if (originalTodayClick) originalTodayClick(e);
-            setTimeout(resetScrollPosition, 100);
+        const attachBlur = (el) => {
+            if (!el.hasAttribute('data-fix-listen')) {
+                el.setAttribute('data-fix-listen', 'true');
+                el.addEventListener('blur', () => setTimeout(window.fixKeyboardLayout, 150));
+            }
         };
-    }
-
-    // 日记本内所有按钮修复（翻页、新增、删除、返回书架等）
-    const diaryButtons = ['prevPageBtn', 'nextPageBtn', 'addPageBtn', 'deletePageBtn', 'backToShelfBtn'];
-    diaryButtons.forEach(btnId => {
-        const btn = document.getElementById(btnId);
-        if (btn) {
-            const originalClick = btn.onclick;
-            btn.onclick = (e) => {
-                fixBlankSpace();
-                if (originalClick) originalClick(e);
-                // 动画后重置滚动
-                setTimeout(resetScrollPosition, 350);
-            };
-        }
-    });
-
-    // 快速滑块滑动结束后修复
-    const slider = document.getElementById('quickPageSlider');
-    if (slider) {
-        slider.addEventListener('change', () => {
-            setTimeout(resetScrollPosition, 300);
+        document.querySelectorAll('input, textarea, [contenteditable="true"]').forEach(attachBlur);
+        const observer = new MutationObserver(() => {
+            document.querySelectorAll('input, textarea, [contenteditable="true"]').forEach(attachBlur);
         });
-    }
+        observer.observe(document.body, { childList: true, subtree: true });
+    };
 
-    // 新增计划页面关闭时修复（关闭键盘）
-    const backToPunch = document.getElementById('back-btn');
-    const savePlan = document.getElementById('save-plan-btn');
-    if (backToPunch) {
-        const originalBack = backToPunch.onclick;
-        backToPunch.onclick = (e) => {
-            fixBlankSpace();
-            if (originalBack) originalBack(e);
-        };
-    }
-    if (savePlan) {
-        const originalSave = savePlan.onclick;
-        savePlan.onclick = (e) => {
-            fixBlankSpace();
-            if (originalSave) originalSave(e);
-        };
-    }
-
-    // 时间视图日期切换时修复
-    const prevTimeBtn = document.getElementById('prev-time-day');
-    const nextTimeBtn = document.getElementById('next-time-day');
-    if (prevTimeBtn) {
-        const originalPrev = prevTimeBtn.onclick;
-        prevTimeBtn.onclick = (e) => {
-            fixBlankSpace();
-            if (originalPrev) originalPrev(e);
-            setTimeout(resetScrollPosition, 150);
-        };
-    }
-    if (nextTimeBtn) {
-        const originalNext = nextTimeBtn.onclick;
-        nextTimeBtn.onclick = (e) => {
-            fixBlankSpace();
-            if (originalNext) originalNext(e);
-            setTimeout(resetScrollPosition, 150);
-        };
-    }
-
-    // 日历月份切换时修复
-    const prevMonth = document.getElementById('prev-month');
-    const nextMonth = document.getElementById('next-month');
-    if (prevMonth) {
-        const originalPrevMonth = prevMonth.onclick;
-        prevMonth.onclick = (e) => {
-            fixBlankSpace();
-            if (originalPrevMonth) originalPrevMonth(e);
-            setTimeout(resetScrollPosition, 150);
-        };
-    }
-    if (nextMonth) {
-        const originalNextMonth = nextMonth.onclick;
-        nextMonth.onclick = (e) => {
-            fixBlankSpace();
-            if (originalNextMonth) originalNextMonth(e);
-            setTimeout(resetScrollPosition, 150);
-        };
-    }
-
-    // 确保对话框关闭后不残留空白
-    const closeModals = ['close-settings', 'close-day-details', 'close-year-month-picker', 'close-date-picker', 'close-backup-modal', 'close-tomato', 'close-edit-timer', 'close-add-timer'];
-    closeModals.forEach(cls => {
-        const btn = document.getElementById(cls);
-        if (btn) {
-            btn.addEventListener('click', () => {
-                setTimeout(resetScrollPosition, 100);
-            });
+    const wrapNavButton = (btnId, originalHandler) => {
+        const btn = document.getElementById(btnId);
+        if (btn && originalHandler) {
+            const wrapped = (e) => {
+                window.fixKeyboardLayout();
+                originalHandler(e);
+            };
+            btn.onclick = wrapped;
+            return wrapped;
         }
-    });
+        return originalHandler;
+    };
+
+    setTimeout(() => {
+        const navIds = ['nav-punch', 'nav-time', 'nav-calendar', 'nav-journal'];
+        navIds.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn && btn.onclick) {
+                wrapNavButton(id, btn.onclick);
+            } else if (btn) {
+                let attempts = 0;
+                const interval = setInterval(() => {
+                    if (btn.onclick) {
+                        wrapNavButton(id, btn.onclick);
+                        clearInterval(interval);
+                    } else if (++attempts > 30) {
+                        clearInterval(interval);
+                    }
+                }, 100);
+            }
+        });
+        initKeyboardListeners();
+        setTimeout(window.fixKeyboardLayout, 200);
+    }, 500);
 })();
