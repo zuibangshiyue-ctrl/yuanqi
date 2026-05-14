@@ -1,4 +1,4 @@
-// 元气打卡完整版 JS (已修复隐藏非周期计划导致周期卡片次日不显示的问题 + PWA键盘空白修复)
+// 元气打卡完整版 JS (已修复隐藏非周期计划导致周期卡片次日不显示的问题 + PWA键盘空白修复 + 计时器分段记录)
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -695,6 +695,11 @@ function clearAllData() {
       p.paused = false;
       p.timed = false;
       
+      // 清除计时分段相关字段
+      p.timerStartTime = null;
+      p.pauseSegments = [];
+      p.pauseStartTime = null;
+      
       const today = getTodayDateString();
       p.history[today] = {
         checked: false,
@@ -880,6 +885,28 @@ function addTimerSessions(startTime, endTime, cardId, punchName) {
   return sessions;
 }
 
+// 新增：批量添加计时时间段（用于分段计时）
+function addTimerSegments(segments, cardId, punchName) {
+  if (!segments || segments.length === 0) return [];
+  const parentId = generateParentId();
+  let allSessions = [];
+  
+  for (const seg of segments) {
+    const sessions = splitTimerRangeIntoDays(seg.startTime, seg.endTime, cardId, punchName, parentId);
+    allSessions.push(...sessions);
+  }
+  
+  timerSessions.push(...allSessions);
+  localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
+  
+  const affectedDates = [...new Set(allSessions.map(s => s.date))];
+  affectedDates.forEach(date => {
+    updatePunchStatusFromSessions(cardId, date);
+  });
+  
+  return allSessions;
+}
+
 function deleteTimerSessionsByParentId(parentId) {
   const toRemove = timerSessions.filter(s => s.parentId === parentId).map(s => s.id);
   if (toRemove.length === 0) return false;
@@ -978,6 +1005,11 @@ function initPunchHistory(punch) {
   if (!punch.history) {
     punch.history = {};
   }
+  
+  // 确保计时分段相关字段存在
+  if (punch.timerStartTime === undefined) punch.timerStartTime = null;
+  if (punch.pauseSegments === undefined) punch.pauseSegments = [];
+  if (punch.pauseStartTime === undefined) punch.pauseStartTime = null;
 
   const today = getTodayDateString();
   const todayStart = getTodayStart();
@@ -998,6 +1030,10 @@ function initPunchHistory(punch) {
       punch.timed = false;
       punch.timer = null;
       punch.timerStatus = 'init';
+      // 重置计时分段相关字段
+      punch.timerStartTime = null;
+      punch.pauseSegments = [];
+      punch.pauseStartTime = null;
     }
     
     punch.history[today] = {
@@ -1116,11 +1152,9 @@ function checkCountdownCompletion(p) {
       const elapsed = Date.now() - p.timer.startTime;
       if (elapsed >= totalCountdownMs) {
         console.log('倒计时完成，自动打卡:', p.name, 'ID:', p.id);
-        if (p.timer.startTime) {
-          const startTime = new Date(p.timer.startTime);
-          const endTime = new Date();
-          recordTimerSession(p.id, p.name, startTime, endTime, elapsed);
-        }
+        
+        // 生成分段记录
+        buildAndSaveSegmentsFromTimer(p);
         
         p.timed = true;
         p.timerStatus = 'init';
@@ -1145,6 +1179,80 @@ function checkCountdownCompletion(p) {
     }
   }
   return false;
+}
+
+// 根据计时分段字段生成活动区间并保存到timerSessions
+function buildAndSaveSegmentsFromTimer(punch) {
+  if (!punch.timerStartTime) {
+    console.warn('buildAndSaveSegmentsFromTimer: timerStartTime 为空');
+    return null;
+  }
+  
+  const endTime = Date.now();
+  const startTime = punch.timerStartTime;
+  const pauseSegments = punch.pauseSegments || [];
+  let activitySegments = [];
+  
+  // 计算活动区间：从 startTime 到 endTime，排除暂停区间
+  let currentStart = startTime;
+  
+  // 按开始时间排序暂停区间
+  const sortedPauses = [...pauseSegments].sort((a, b) => a.start - b.start);
+  
+  for (const pause of sortedPauses) {
+    if (pause.start > currentStart && pause.start < endTime) {
+      // 活动区间: currentStart 到 pause.start
+      if (pause.start > currentStart) {
+        activitySegments.push({
+          startTime: currentStart,
+          endTime: Math.min(pause.start, endTime)
+        });
+      }
+      // 更新 currentStart 为暂停结束时间
+      currentStart = Math.max(currentStart, pause.end);
+    }
+  }
+  
+  // 最后一段活动区间
+  if (currentStart < endTime) {
+    activitySegments.push({
+      startTime: currentStart,
+      endTime: endTime
+    });
+  }
+  
+  // 过滤掉时长为0的区间
+  activitySegments = activitySegments.filter(seg => seg.endTime > seg.startTime);
+  
+  if (activitySegments.length === 0) {
+    console.warn('buildAndSaveSegmentsFromTimer: 没有有效的活动区间');
+    return null;
+  }
+  
+  // 保存到 timerSessions
+  const parentId = generateParentId();
+  let allSessions = [];
+  
+  for (const seg of activitySegments) {
+    const sessions = splitTimerRangeIntoDays(new Date(seg.startTime), new Date(seg.endTime), punch.id, punch.name, parentId);
+    allSessions.push(...sessions);
+  }
+  
+  timerSessions.push(...allSessions);
+  localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
+  
+  // 更新打卡状态
+  const affectedDates = [...new Set(allSessions.map(s => s.date))];
+  affectedDates.forEach(date => {
+    updatePunchStatusFromSessions(punch.id, date);
+  });
+  
+  // 清除计时分段相关字段
+  punch.timerStartTime = null;
+  punch.pauseSegments = [];
+  punch.pauseStartTime = null;
+  
+  return parentId;
 }
 
 function updateRunningTimers() {
@@ -1432,23 +1540,19 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
 
 // 卡片是否应该显示（核心修复）
 function shouldShowPunch(p) {
-  // 如果隐藏非周期计划开关关闭 -> 始终显示（无论是否在周期内）
   if (!hideInactivePlans) {
     return true;
   }
   
-  // 如果开关打开，则仅显示在当前周期内的卡片
   const inPeriod = isInCurrentPeriod(p);
   if (!inPeriod) {
     return false;
   }
   
-  // 对于 single 计划且未完成，也显示在周期内
   if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
     return true;
   }
   
-  // 其他情况：在周期内就显示
   return true;
 }
 
@@ -2106,6 +2210,11 @@ async function renderPunchList(forceRender = false) {
             p.timerStatus = 'init';
             p.paused = false;
             p.timed = false;
+            
+            // 清除计时分段相关字段
+            p.timerStartTime = null;
+            p.pauseSegments = [];
+            p.pauseStartTime = null;
 
             if (p.enableTimer) {
               removeTimerSessionsForToday(p.id, p.name);
@@ -2130,41 +2239,63 @@ async function renderPunchList(forceRender = false) {
         } 
         else if (p.enableTimer) {
           if (clickCount === 1) {
+            // 单击：开始/暂停计时
             if (!p.timer) {
+              // 首次开始计时
               p.timer = { 
                 elapsed: 0,
                 startTime: Date.now(),
                 updateCount: 0
               };
               p.timerStatus = 'running';
+              p.timerStartTime = Date.now();  // 记录开始时间
+              p.pauseSegments = [];
+              p.pauseStartTime = null;
             } else if (p.timerStatus === 'init' || p.timerStatus === 'paused') {
+              // 从暂停恢复，记录恢复时间
+              if (p.pauseStartTime) {
+                // 暂停结束，记录暂停区间
+                p.pauseSegments.push({
+                  start: p.pauseStartTime,
+                  end: Date.now()
+                });
+                p.pauseStartTime = null;
+              }
               p.timer.startTime = Date.now() - (p.timer.elapsed || 0);
               p.timerStatus = 'running';
-              
               checkCountdownCompletion(p);
             } else if (p.timerStatus === 'running') {
+              // 暂停计时
               if (p.timer.startTime) {
                 p.timer.elapsed = Date.now() - p.timer.startTime;
               }
               p.timerStatus = 'paused';
+              p.pauseStartTime = Date.now();  // 记录暂停开始时间
             }
             
             saveToLocalStorage();
             updateCardTimerUI(li, p);
           } else if (clickCount === 2) {
+            // 双击：完成计时
             if (p.timerInterval) {
               clearInterval(p.timerInterval);
             }
+            
+            // 确保计时分段完整：如果当前处于暂停状态，需要先闭合暂停区间
+            if (p.pauseStartTime) {
+              p.pauseSegments.push({
+                start: p.pauseStartTime,
+                end: Date.now()
+              });
+              p.pauseStartTime = null;
+            }
+            
+            // 生成分段记录并保存
+            const parentId = buildAndSaveSegmentsFromTimer(p);
+            
             p.timed = true;
             p.timerStatus = 'init';
             p.paused = false;
-            
-            if (p.timer && p.timer.startTime) {
-              const startTime = new Date(p.timer.startTime);
-              const endTime = new Date();
-              const duration = p.timer.elapsed || (Date.now() - p.timer.startTime);
-              recordTimerSession(p.id, p.name, startTime, endTime, duration);
-            }
             
             p.timer = null;
             initPunchHistory(p);
@@ -2502,7 +2633,10 @@ function saveAndRender() {
           customWeekday: p.customWeekday,
           customMonthOfYear: p.customMonthOfYear,
           customDayOfYear: p.customDayOfYear,
-          forceActive: p.forceActive || false
+          forceActive: p.forceActive || false,
+          timerStartTime: p.timerStartTime || null,
+          pauseSegments: p.pauseSegments || [],
+          pauseStartTime: p.pauseStartTime || null
         };
         return compressed;
       });
@@ -3038,7 +3172,10 @@ if (savePlanBtn) {
           maxPunches: dailyTimes
         }
       },
-      forceActive: false
+      forceActive: false,
+      timerStartTime: null,
+      pauseSegments: [],
+      pauseStartTime: null
     };
 
     console.log('创建计划对象:', {
@@ -3090,6 +3227,11 @@ if (savePlanBtn) {
       plan.timed = existingTimed || plan.timed;
       plan.id = existingId;
       plan.forceActive = punches[editingIndex].forceActive || false;
+      
+      // 保留计时分段相关字段
+      plan.timerStartTime = punches[editingIndex].timerStartTime || null;
+      plan.pauseSegments = punches[editingIndex].pauseSegments || [];
+      plan.pauseStartTime = punches[editingIndex].pauseStartTime || null;
 
       punches[editingIndex] = { ...punches[editingIndex], ...plan };
       console.log('修改计划，索引:', editingIndex, 'ID:', plan.id);
@@ -3164,7 +3306,10 @@ if (endPlanBtn) {
         }
       },
       isEnded: true,
-      forceActive: false
+      forceActive: false,
+      timerStartTime: null,
+      pauseSegments: [],
+      pauseStartTime: null
     };
 
     if (editingIndex !== null) {
@@ -5552,6 +5697,8 @@ function startTomatoTimer() {
         if (elapsed >= totalMs) {
           const today = getTodayDateString();
           if (!isPunchDoneToday(currentTomatoPunch)) {
+            // 生成分段记录
+            buildAndSaveSegmentsFromTimer(currentTomatoPunch);
             currentTomatoPunch.timed = true;
             currentTomatoPunch.timerStatus = 'init';
             currentTomatoPunch.timer = null;
@@ -5609,6 +5756,9 @@ function tomatoStart() {
       currentTomatoPunch.timer.startTime = Date.now() - (currentTomatoPunch.timer.elapsed || 0);
     }
     currentTomatoPunch.timerStatus = 'running';
+    if (!currentTomatoPunch.timerStartTime) {
+      currentTomatoPunch.timerStartTime = Date.now();
+    }
     saveToLocalStorage();
     updateTomatoDisplayAndRing();
     renderPunchList(true);
@@ -5635,6 +5785,9 @@ function tomatoReset() {
   currentTomatoPunch.timerStatus = 'init';
   currentTomatoPunch.timed = false;
   currentTomatoPunch.paused = false;
+  currentTomatoPunch.timerStartTime = null;
+  currentTomatoPunch.pauseSegments = [];
+  currentTomatoPunch.pauseStartTime = null;
   saveToLocalStorage();
   updateTomatoDisplayAndRing();
   renderPunchList(true);
@@ -5644,12 +5797,8 @@ function tomatoComplete() {
   if (!currentTomatoPunch) return;
   const today = getTodayDateString();
   if (!isPunchDoneToday(currentTomatoPunch)) {
-    if (currentTomatoPunch.enableTimer && currentTomatoPunch.timer && currentTomatoPunch.timer.startTime) {
-      const startTime = new Date(currentTomatoPunch.timer.startTime);
-      const endTime = new Date();
-      const duration = currentTomatoPunch.timer.elapsed || (Date.now() - currentTomatoPunch.timer.startTime);
-      recordTimerSession(currentTomatoPunch.id, currentTomatoPunch.name, startTime, endTime, duration);
-    }
+    // 生成分段记录
+    buildAndSaveSegmentsFromTimer(currentTomatoPunch);
     currentTomatoPunch.timed = true;
     currentTomatoPunch.timerStatus = 'init';
     currentTomatoPunch.timer = null;
@@ -6384,7 +6533,6 @@ function bindDiaryEvents() {
     const delBtn = document.getElementById('deletePageBtn');
     const backBtn = document.getElementById('backToShelfBtn');
 
-    // 包装原有点击回调，先修复布局
     if (prevBtn) {
         const orig = prevBtn.onclick;
         prevBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else prevPageDiary(); };
@@ -6526,6 +6674,11 @@ async function initApp() {
           p.history = {};
         }
         if (p.forceActive === undefined) p.forceActive = false;
+        
+        // 确保计时分段字段存在
+        if (p.timerStartTime === undefined) p.timerStartTime = null;
+        if (p.pauseSegments === undefined) p.pauseSegments = [];
+        if (p.pauseStartTime === undefined) p.pauseStartTime = null;
 
         initPunchHistory(p);
 
@@ -6651,6 +6804,9 @@ function resetAllPeriodicPlans() {
             p.timed = false;
             p.timer = null;
             p.timerStatus = 'init';
+            p.timerStartTime = null;
+            p.pauseSegments = [];
+            p.pauseStartTime = null;
           }
 
           p.history[today] = {
@@ -6681,9 +6837,8 @@ document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
 
-// ======================= PWA 键盘空白修复补丁（增强版，同时修复日记按钮） =======================
+// ======================= PWA 键盘空白修复补丁 =======================
 (function() {
-    // 强制重绘布局，消除键盘残留空白 - 暴露为全局函数
     window.fixKeyboardLayout = function() {
         const navbar = document.getElementById('navbar');
         if (navbar) {
