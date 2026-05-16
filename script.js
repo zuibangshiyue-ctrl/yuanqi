@@ -1,4 +1,4 @@
-// 元气打卡完整版 JS (已修复隐藏非周期计划导致周期卡片次日不显示的问题 + PWA键盘空白修复 + 计时器分段记录)
+// 元气打卡完整版 JS (已修复隐藏非周期计划拖拽排序导致卡片丢失的问题)
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -1756,14 +1756,46 @@ function onDragEnd(e) {
     removeDragClone();
 
     const list = document.getElementById('punch-list');
-    const newOrder = [];
-    for (let child of list.children) {
-      const id = child.dataset.punchId;
-      const punch = punches.find(p => p.id === id);
-      if (punch) newOrder.push(punch);
+    // ========== 修复：拖拽排序时保留隐藏卡片 ==========
+    // 获取当前显示卡片的顺序（按照DOM顺序）
+    const visibleChildren = Array.from(list.children);
+    const newVisibleOrder = [];
+    for (let child of visibleChildren) {
+      const punchId = child.dataset.punchId;
+      const punch = punches.find(p => p.id === punchId);
+      if (punch) newVisibleOrder.push(punch);
     }
-    punches = newOrder;
+    
+    // 重建完整顺序（保留隐藏卡片）
+    const newFullOrder = [];
+    const visibleSet = new Set(newVisibleOrder.map(p => p.id));
+    let visibleIdx = 0;
+    for (let i = 0; i < punches.length; i++) {
+      const p = punches[i];
+      if (visibleSet.has(p.id)) {
+        // 可见卡片，按新顺序取
+        if (visibleIdx < newVisibleOrder.length) {
+          newFullOrder.push(newVisibleOrder[visibleIdx]);
+          visibleIdx++;
+        } else {
+          // fallback（不应发生）
+          newFullOrder.push(p);
+        }
+      } else {
+        // 隐藏卡片直接保留
+        newFullOrder.push(p);
+      }
+    }
+    // 确保所有新可见卡片都加入（理论上数量相等，安全起见）
+    while (visibleIdx < newVisibleOrder.length) {
+      newFullOrder.push(newVisibleOrder[visibleIdx]);
+      visibleIdx++;
+    }
+    punches = newFullOrder;
+    // ========== 修复结束 ==========
+    
     saveToLocalStorage();
+    renderPunchList(true);
   }
   stopAutoScroll();
   dragStartElement = null;
