@@ -1,4 +1,4 @@
-// 元气打卡完整版 JS (已修复隐藏非周期计划拖拽排序导致卡片丢失的问题)
+// 元气打卡完整版 JS (修复计时器卡片每日多次打卡计数 + 支持每日0次=无限次数)
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -9,7 +9,6 @@ let recentIcons = JSON.parse(localStorage.getItem('recentIcons') || '["📋","�
 let globalTimerInterval = null;
 
 let hideInactivePlans = JSON.parse(localStorage.getItem('hideInactivePlans') || 'false');
-let clearJournalData = JSON.parse(localStorage.getItem('clearJournalData') || 'false');
 const showExpiredReminders = true;
 const autoSort = true;
 
@@ -85,6 +84,7 @@ let timerTypeOptions = document.querySelectorAll('.timer-type-option');
 const punchHeaderButtons = document.getElementById('punch-header-buttons');
 const todayHeaderBtn = document.getElementById('today-header-btn');
 const journalAddBookBtn = document.getElementById('journal-add-book-btn');
+const journalSettingsBtn = document.getElementById('journal-settings-btn');
 
 const endPlanBtn = document.getElementById('end-plan-btn');
 const savePlanBtn = document.getElementById('save-plan-btn');
@@ -337,7 +337,6 @@ async function prepareDataForExport() {
     punches: [],
     recentIcons: [],
     hideInactivePlans: hideInactivePlans,
-    clearJournalData: clearJournalData,
     timerSessions: timerSessions,
     cardColorMap: cardColorMap,
     books: books,
@@ -466,6 +465,9 @@ function getFrequencyLabel(p) {
   if (!p.frequency) return '';
   switch(p.frequency) {
     case 'daily':
+      if (p.dailyTimes === 0) {
+        return '无限/天';
+      }
       if (p.dailyTimes && p.dailyTimes > 1) {
         return `${p.dailyTimes}次/天`;
       }
@@ -499,27 +501,6 @@ function getFrequencyLabel(p) {
       
     case 'once':
       return '一次';
-    case 'custom':
-      if (p.customUnit) {
-        switch(p.customUnit) {
-          case 'days':
-            return `每${p.customInterval || 1}天`;
-          case 'weeks':
-            if (p.customWeekdays && p.customWeekdays.length > 0) {
-              const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-              const daysText = p.customWeekdays.map(day => weekdays[day]).join(',');
-              return `每${p.customInterval || 1}周${daysText}`;
-            }
-            return `每${p.customInterval || 1}周`;
-          case 'months':
-            return `每${p.customInterval || 1}月`;
-          case 'years':
-            return `每${p.customInterval || 1}年`;
-          default:
-            return '自定义';
-        }
-      }
-      return '自定义';
     default:
       return '';
   }
@@ -626,12 +607,6 @@ async function importBackupData(event) {
         punches = processedData.punches || [];
         recentIcons = processedData.recentIcons || [];
         hideInactivePlans = processedData.hideInactivePlans || false;
-        if (typeof processedData.clearJournalData === 'boolean') {
-          clearJournalData = processedData.clearJournalData;
-          localStorage.setItem('clearJournalData', JSON.stringify(clearJournalData));
-          const clearJournalCheckbox = document.getElementById('clear-journal-data');
-          if (clearJournalCheckbox) clearJournalCheckbox.checked = clearJournalData;
-        }
         timerSessions = processedData.timerSessions || [];
         cardColorMap = processedData.cardColorMap || {};
         
@@ -673,11 +648,7 @@ function initClearAllDataFunction() {
 }
 
 function clearAllData() {
-  let confirmMsg = '警告：这将删除所有打卡记录（包括历史记录、计时记录等），但会保留卡片计划数据。此操作不可恢复！确定要继续吗？';
-  if (clearJournalData) {
-    confirmMsg = '警告：这将删除所有打卡记录，并且【同时删除所有日记本及日记内容】。此操作不可恢复！确定要继续吗？';
-  }
-  if (!confirm(confirmMsg)) {
+  if (!confirm('警告：这将删除所有打卡记录（包括历史记录、计时记录等），但会保留卡片计划数据。此操作不可恢复！确定要继续吗？')) {
     return;
   }
   
@@ -695,7 +666,6 @@ function clearAllData() {
       p.paused = false;
       p.timed = false;
       
-      // 清除计时分段相关字段
       p.timerStartTime = null;
       p.pauseSegments = [];
       p.pauseStartTime = null;
@@ -715,21 +685,7 @@ function clearAllData() {
     editMode = false;
     editingIndex = null;
     
-    if (clearJournalData) {
-      books = [];
-      localStorage.removeItem('paper_multi_books');
-      initDataDiary();
-      if (journalSection && journalSection.classList.contains('active')) {
-        if (notebookView.style.display === 'block') {
-          closeNotebookDiary();
-        } else {
-          renderBookshelfUI();
-        }
-      }
-      showToast('打卡记录和日记数据已全部清空，已重新创建默认日记本');
-    } else {
-      showToast('打卡记录已清空');
-    }
+    showToast('打卡记录已清空');
     
     localStorage.setItem('punches', JSON.stringify(punches));
     localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
@@ -885,7 +841,6 @@ function addTimerSessions(startTime, endTime, cardId, punchName) {
   return sessions;
 }
 
-// 新增：批量添加计时时间段（用于分段计时）
 function addTimerSegments(segments, cardId, punchName) {
   if (!segments || segments.length === 0) return [];
   const parentId = generateParentId();
@@ -911,7 +866,7 @@ function deleteTimerSessionsByParentId(parentId) {
   const toRemove = timerSessions.filter(s => s.parentId === parentId).map(s => s.id);
   if (toRemove.length === 0) return false;
   
-  const affected = new Map(); // cardId -> Set of dates
+  const affected = new Map();
   timerSessions.forEach(s => {
     if (s.parentId === parentId) {
       if (!affected.has(s.cardId)) affected.set(s.cardId, new Set());
@@ -1006,7 +961,6 @@ function initPunchHistory(punch) {
     punch.history = {};
   }
   
-  // 确保计时分段相关字段存在
   if (punch.timerStartTime === undefined) punch.timerStartTime = null;
   if (punch.pauseSegments === undefined) punch.pauseSegments = [];
   if (punch.pauseStartTime === undefined) punch.pauseStartTime = null;
@@ -1030,26 +984,27 @@ function initPunchHistory(punch) {
       punch.timed = false;
       punch.timer = null;
       punch.timerStatus = 'init';
-      // 重置计时分段相关字段
       punch.timerStartTime = null;
       punch.pauseSegments = [];
       punch.pauseStartTime = null;
     }
     
+    const maxPunches = (punch.dailyTimes === 0) ? 0 : (punch.dailyTimes || 1);
     punch.history[today] = {
       checked: false,
       checkedTime: null,
       lastUpdate: getCurrentTimeString(),
       punches: 0,
-      maxPunches: punch.dailyTimes || 1
+      maxPunches: maxPunches
     };
   } else if (!todayRecord) {
+    const maxPunches = (punch.dailyTimes === 0) ? 0 : (punch.dailyTimes || 1);
     punch.history[today] = {
       checked: false,
       checkedTime: null,
       lastUpdate: getCurrentTimeString(),
       punches: 0,
-      maxPunches: punch.dailyTimes || 1
+      maxPunches: maxPunches
     };
   }
 }
@@ -1063,6 +1018,8 @@ function hasAnyCompletedCheckForOnce(punch) {
     if (punch.dailyTimes && punch.dailyTimes > 1) {
       const maxPunches = record.maxPunches || punch.dailyTimes;
       isCompleted = (record.punches || 0) >= maxPunches;
+    } else if (punch.dailyTimes === 0) {
+      isCompleted = false;
     } else {
       isCompleted = record.checked === true;
     }
@@ -1081,10 +1038,16 @@ function calculateStreak(punch) {
   if (dates.length === 0) return { currentStreak: 0, missedStreak: 0 };
 
   const todayRecord = punch.history[today];
-  const todayChecked = todayRecord && 
-                      ((punch.dailyTimes && punch.dailyTimes > 1 && 
-                        todayRecord.punches >= todayRecord.maxPunches) ||
-                       ((!punch.dailyTimes || punch.dailyTimes === 1) && todayRecord.checked));
+  
+  let todayChecked = false;
+  if (punch.dailyTimes === 0) {
+    todayChecked = false;
+  } else if (punch.dailyTimes && punch.dailyTimes > 1) {
+    todayChecked = todayRecord && (todayRecord.punches || 0) >= (todayRecord.maxPunches || punch.dailyTimes);
+  } else {
+    todayChecked = todayRecord && todayRecord.checked === true;
+  }
+  
   if (todayChecked) {
     let checkDate = new Date(today);
     let currentStreak = 0;
@@ -1094,7 +1057,9 @@ function calculateStreak(punch) {
 
       let dayChecked = false;
       if (dayRecord) {
-        if (punch.dailyTimes && punch.dailyTimes > 1) {
+        if (punch.dailyTimes === 0) {
+          dayChecked = false;
+        } else if (punch.dailyTimes && punch.dailyTimes > 1) {
           dayChecked = dayRecord.punches >= dayRecord.maxPunches;
         } else {
           dayChecked = dayRecord.checked;
@@ -1122,7 +1087,9 @@ function calculateStreak(punch) {
 
     let dayCompleted = false;
     if (dayRecord) {
-      if (punch.dailyTimes && punch.dailyTimes > 1) {
+      if (punch.dailyTimes === 0) {
+        dayCompleted = false;
+      } else if (punch.dailyTimes && punch.dailyTimes > 1) {
         dayCompleted = dayRecord.punches >= dayRecord.maxPunches;
       } else {
         dayCompleted = dayRecord.checked;
@@ -1145,43 +1112,43 @@ function calculateStreak(punch) {
   return { currentStreak: 0, missedStreak: missedStreak };
 }
 
-function checkCountdownCompletion(p) {
-  if (p.enableTimer && p.timerType === 'countdown' && p.countdown) {
-    const totalCountdownMs = (p.countdown.h * 3600 + p.countdown.m * 60 + p.countdown.s) * 1000;
-    if (p.timer && p.timerStatus === 'running') {
-      const elapsed = Date.now() - p.timer.startTime;
-      if (elapsed >= totalCountdownMs) {
-        console.log('倒计时完成，自动打卡:', p.name, 'ID:', p.id);
-        
-        // 生成分段记录
-        buildAndSaveSegmentsFromTimer(p);
-        
-        p.timed = true;
-        p.timerStatus = 'init';
-        p.timer = null;
-        
-        const today = getTodayDateString();
-        initPunchHistory(p);
-        p.history[today] = {
-          checked: true,
-          checkedTime: getCurrentTimeString(),
-          lastUpdate: getCurrentTimeString(),
-          isTimed: true,
-          punches: 1,
-          maxPunches: p.dailyTimes || 1
-        };
-        if (p.frequency === 'once' && p.forceActive === true) {
-            p.forceActive = false;
-        }
-        saveAndRender();
-        return true;
-      }
-    }
+async function completeTimerPunch(p, options = {}) {
+  const today = getTodayDateString();
+  initPunchHistory(p);
+  const dayRecord = p.history[today];
+  const maxPunches = (p.dailyTimes === 0) ? 0 : (p.dailyTimes || 1);
+  if (dayRecord.maxPunches === undefined) dayRecord.maxPunches = maxPunches;
+  
+  const parentId = buildAndSaveSegmentsFromTimer(p);
+  if (!parentId && p.enableTimer) {
+    console.warn('计时活动区间保存失败');
   }
-  return false;
+  
+  const updatedRecord = p.history[today];
+  const completed = (maxPunches !== 0) && (updatedRecord.punches >= maxPunches);
+  
+  if (completed) {
+    updatedRecord.checked = true;
+    updatedRecord.checkedTime = getCurrentTimeString();
+    p.timed = true;
+    if (p.frequency === 'once' && p.forceActive === true) {
+      p.forceActive = false;
+    }
+  } else {
+    p.timer = null;
+    p.timerStatus = 'init';
+    p.paused = false;
+    p.timerStartTime = null;
+    p.pauseSegments = [];
+    p.pauseStartTime = null;
+    p.timed = false;
+  }
+  
+  saveToLocalStorage();
+  renderPunchList(true);
+  return true;
 }
 
-// 根据计时分段字段生成活动区间并保存到timerSessions
 function buildAndSaveSegmentsFromTimer(punch) {
   if (!punch.timerStartTime) {
     console.warn('buildAndSaveSegmentsFromTimer: timerStartTime 为空');
@@ -1193,27 +1160,22 @@ function buildAndSaveSegmentsFromTimer(punch) {
   const pauseSegments = punch.pauseSegments || [];
   let activitySegments = [];
   
-  // 计算活动区间：从 startTime 到 endTime，排除暂停区间
   let currentStart = startTime;
   
-  // 按开始时间排序暂停区间
   const sortedPauses = [...pauseSegments].sort((a, b) => a.start - b.start);
   
   for (const pause of sortedPauses) {
     if (pause.start > currentStart && pause.start < endTime) {
-      // 活动区间: currentStart 到 pause.start
       if (pause.start > currentStart) {
         activitySegments.push({
           startTime: currentStart,
           endTime: Math.min(pause.start, endTime)
         });
       }
-      // 更新 currentStart 为暂停结束时间
       currentStart = Math.max(currentStart, pause.end);
     }
   }
   
-  // 最后一段活动区间
   if (currentStart < endTime) {
     activitySegments.push({
       startTime: currentStart,
@@ -1221,7 +1183,6 @@ function buildAndSaveSegmentsFromTimer(punch) {
     });
   }
   
-  // 过滤掉时长为0的区间
   activitySegments = activitySegments.filter(seg => seg.endTime > seg.startTime);
   
   if (activitySegments.length === 0) {
@@ -1229,7 +1190,6 @@ function buildAndSaveSegmentsFromTimer(punch) {
     return null;
   }
   
-  // 保存到 timerSessions
   const parentId = generateParentId();
   let allSessions = [];
   
@@ -1241,18 +1201,64 @@ function buildAndSaveSegmentsFromTimer(punch) {
   timerSessions.push(...allSessions);
   localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
   
-  // 更新打卡状态
   const affectedDates = [...new Set(allSessions.map(s => s.date))];
   affectedDates.forEach(date => {
     updatePunchStatusFromSessions(punch.id, date);
   });
   
-  // 清除计时分段相关字段
   punch.timerStartTime = null;
   punch.pauseSegments = [];
   punch.pauseStartTime = null;
   
   return parentId;
+}
+
+function updatePunchStatusFromSessions(cardId, date) {
+  const punchesToUpdate = punches.filter(p => p.id === cardId);
+  if (punchesToUpdate.length === 0) return;
+
+  const sessionsForCard = timerSessions.filter(s => s.date === date && s.cardId === cardId);
+  const uniqueParents = new Set();
+  sessionsForCard.forEach(s => { if (s.parentId) uniqueParents.add(s.parentId); });
+  const sessionCount = uniqueParents.size;
+
+  punchesToUpdate.forEach(punch => {
+    initPunchHistory(punch);
+    if (!punch.history[date]) {
+      const maxPunchesVal = (punch.dailyTimes === 0) ? 0 : (punch.dailyTimes || 1);
+      punch.history[date] = {
+        checked: false,
+        checkedTime: null,
+        lastUpdate: getCurrentTimeString(),
+        punches: 0,
+        maxPunches: maxPunchesVal
+      };
+    }
+    const dayRecord = punch.history[date];
+    const maxPunches = (punch.dailyTimes === 0) ? 0 : (punch.dailyTimes || 1);
+    dayRecord.maxPunches = maxPunches;
+    
+    dayRecord.punches = sessionCount;
+    dayRecord.lastUpdate = getCurrentTimeString();
+    
+    if (maxPunches !== 0 && sessionCount >= maxPunches) {
+      dayRecord.checked = true;
+      dayRecord.isTimed = true;
+      if (!dayRecord.checkedTime) dayRecord.checkedTime = getCurrentTimeString();
+      if (punch.enableTimer) {
+        punch.timer = null;
+        punch.timerStatus = 'init';
+        punch.timed = true;
+      }
+    } else {
+      dayRecord.checked = false;
+      if (punch.enableTimer) {
+        punch.timer = null;
+        punch.timerStatus = 'init';
+        punch.timed = false;
+      }
+    }
+  });
 }
 
 function updateRunningTimers() {
@@ -1385,7 +1391,6 @@ function saveToLocalStorage() {
     localStorage.setItem('punches', JSON.stringify(dataToSave));
     localStorage.setItem('recentIcons', JSON.stringify(recentIcons));
     localStorage.setItem('hideInactivePlans', JSON.stringify(hideInactivePlans));
-    localStorage.setItem('clearJournalData', JSON.stringify(clearJournalData));
     localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
     localStorage.setItem('cardColorMap', JSON.stringify(cardColorMap));
   } catch (e) {
@@ -1393,7 +1398,6 @@ function saveToLocalStorage() {
   }
 }
 
-// 判断卡片是否在当前周期内（即“应该由计划规则决定是否可打卡”）
 function isInCurrentPeriod(p) {
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -1429,116 +1433,11 @@ function isInCurrentPeriod(p) {
       const date = today.getDate();
       return month === 1 && date === 1;
       
-    case 'custom':
-      return isInCustomPeriod(p, today);
     default:
       return true;
   }
 }
 
-function isInCustomPeriod(p, today) {
-  if (!p.customInterval || !p.customUnit) return true;
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const todayTimestamp = todayStart.getTime();
-  
-  let startDate;
-  if (p.lastCheckDate) {
-    startDate = new Date(p.lastCheckDate);
-  } else if (p.createdDate) {
-    startDate = new Date(p.createdDate);
-  } else {
-    const firstCheckDate = p.history && Object.keys(p.history)
-      .sort()
-      .find(dateStr => {
-        const record = p.history[dateStr];
-        if (p.dailyTimes && p.dailyTimes > 1) {
-          return record.punches >= record.maxPunches;
-        } else {
-          return record.checked === true;
-        }
-      });
-    
-    if (firstCheckDate) {
-      startDate = new Date(firstCheckDate + 'T00:00:00');
-    } else {
-      startDate = todayStart;
-    }
-  }
-  
-  startDate.setHours(0, 0, 0, 0);
-  const startTimestamp = startDate.getTime();
-  const daysDiff = Math.floor((todayTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
-  
-  switch(p.customUnit) {
-    case 'days':
-      return daysDiff % p.customInterval === 0;
-    case 'weeks':
-      if (!p.customWeekdays || p.customWeekdays.length === 0) {
-        return daysDiff % (p.customInterval * 7) === 0;
-      }
-      
-      if (!p.customWeekdays.includes(today.getDay())) {
-        return false;
-      }
-      
-      const weeksDiff = Math.floor(daysDiff / 7);
-      return weeksDiff % p.customInterval === 0;
-      
-    case 'months':
-      const monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12 + 
-                         (today.getMonth() - startDate.getMonth());
-      if (monthsDiff % p.customInterval !== 0) {
-        return false;
-      }
-      
-      if (p.customMonthDayType === 'day') {
-        return today.getDate() === p.customDayOfMonth;
-      } else {
-        return isNthWeekdayOfMonth(today, p.customWeekNumber, p.customWeekday);
-      }
-      
-    case 'years':
-      const yearsDiff = today.getFullYear() - startDate.getFullYear();
-      if (yearsDiff % p.customInterval !== 0) {
-        return false;
-      }
-      
-      return today.getMonth() + 1 === p.customMonthOfYear && 
-             today.getDate() === p.customDayOfYear;
-    default:
-      return true;
-  }
-}
-
-function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
-  
-  if (date.getDay() !== targetWeekday) {
-    return false;
-  }
-  
-  const targetDays = [];
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
-  
-  for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === targetWeekday) {
-      targetDays.push(new Date(d));
-    }
-  }
-  
-  if (weekNumber === -1) {
-    const lastTargetDay = targetDays[targetDays.length - 1];
-    return day === lastTargetDay.getDate();
-  } else {
-    const nthTargetDay = targetDays[weekNumber - 1];
-    return nthTargetDay && day === nthTargetDay.getDate();
-  }
-}
-
-// 卡片是否应该显示（核心修复）
 function shouldShowPunch(p) {
   if (!hideInactivePlans) {
     return true;
@@ -1756,8 +1655,6 @@ function onDragEnd(e) {
     removeDragClone();
 
     const list = document.getElementById('punch-list');
-    // ========== 修复：拖拽排序时保留隐藏卡片 ==========
-    // 获取当前显示卡片的顺序（按照DOM顺序）
     const visibleChildren = Array.from(list.children);
     const newVisibleOrder = [];
     for (let child of visibleChildren) {
@@ -1766,33 +1663,27 @@ function onDragEnd(e) {
       if (punch) newVisibleOrder.push(punch);
     }
     
-    // 重建完整顺序（保留隐藏卡片）
     const newFullOrder = [];
     const visibleSet = new Set(newVisibleOrder.map(p => p.id));
     let visibleIdx = 0;
     for (let i = 0; i < punches.length; i++) {
       const p = punches[i];
       if (visibleSet.has(p.id)) {
-        // 可见卡片，按新顺序取
         if (visibleIdx < newVisibleOrder.length) {
           newFullOrder.push(newVisibleOrder[visibleIdx]);
           visibleIdx++;
         } else {
-          // fallback（不应发生）
           newFullOrder.push(p);
         }
       } else {
-        // 隐藏卡片直接保留
         newFullOrder.push(p);
       }
     }
-    // 确保所有新可见卡片都加入（理论上数量相等，安全起见）
     while (visibleIdx < newVisibleOrder.length) {
       newFullOrder.push(newVisibleOrder[visibleIdx]);
       visibleIdx++;
     }
     punches = newFullOrder;
-    // ========== 修复结束 ==========
     
     saveToLocalStorage();
     renderPunchList(true);
@@ -1832,11 +1723,24 @@ function startDragAfterLongPress(element, clientX, clientY) {
   }, 400);
 }
 
+function canUndoToday(punch) {
+  const today = getTodayDateString();
+  const todayRecord = punch.history && punch.history[today];
+  if (!todayRecord) return false;
+  if (punch.dailyTimes === 0) {
+    return (todayRecord.punches || 0) > 0;
+  }
+  if (punch.dailyTimes && punch.dailyTimes > 1) {
+    return (todayRecord.punches || 0) > 0;
+  }
+  return todayRecord.checked === true;
+}
+
 function getTimerBottomHTML(p) {
     const today = getTodayDateString();
     const todayRecord = p.history[today] || {};
     const todayPunches = todayRecord.punches || 0;
-    const maxPunches = todayRecord.maxPunches || p.dailyTimes || 1;
+    const maxPunches = p.dailyTimes === 0 ? 0 : (todayRecord.maxPunches || p.dailyTimes || 1);
     const isDoneToday = isPunchDoneToday(p);
     const streakInfo = calculateStreak(p);
     const isOnceEnded = (p.frequency === 'once' && isPlanActuallyEnded(p));
@@ -1845,65 +1749,70 @@ function getTimerBottomHTML(p) {
         return `<div class="streak">计划已结束</div>`;
     }
 
-    if (isDoneToday || p.timed) {
-        if (streakInfo.currentStreak > 0) {
-            return `<div class="streak">已打卡${streakInfo.currentStreak}天</div>`;
-        } else {
-            return `<div class="streak">已完成</div>`;
+    if (p.enableTimer && (p.timerStatus === 'running' || p.timerStatus === 'paused')) {
+        let displayText = '';
+        let displayColor = '';
+        if (p.timerType === 'countup') {
+            const elapsed = p.timer?.elapsed || 0;
+            const h = Math.floor(elapsed / 3600000);
+            const m = Math.floor((elapsed % 3600000) / 60000);
+            const s = Math.floor((elapsed % 60000) / 1000);
+            displayText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            displayColor = '#4a90e2';
+        } else if (p.timerType === 'countdown' && p.countdown) {
+            const totalCountdownMs = (p.countdown.h * 3600 + p.countdown.m * 60 + p.countdown.s) * 1000;
+            const elapsed = p.timer?.elapsed || 0;
+            const remaining = Math.max(0, totalCountdownMs - elapsed);
+            const h = Math.floor(remaining / 3600000);
+            const m = Math.floor((remaining % 3600000) / 60000);
+            const s = Math.floor((remaining % 60000) / 1000);
+            displayText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            displayColor = '#ED62ED';
         }
-    } 
-    else if (p.enableTimer) {
-        if (p.timerStatus === 'running' || p.timerStatus === 'paused') {
-            let displayText = '';
-            let displayColor = '';
-            if (p.timerType === 'countup') {
-                const elapsed = p.timer?.elapsed || 0;
-                const h = Math.floor(elapsed / 3600000);
-                const m = Math.floor((elapsed % 3600000) / 60000);
-                const s = Math.floor((elapsed % 60000) / 1000);
-                displayText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                displayColor = '#4a90e2';
-            } else if (p.timerType === 'countdown' && p.countdown) {
-                const totalCountdownMs = (p.countdown.h * 3600 + p.countdown.m * 60 + p.countdown.s) * 1000;
-                const elapsed = p.timer?.elapsed || 0;
-                const remaining = Math.max(0, totalCountdownMs - elapsed);
-                const h = Math.floor(remaining / 3600000);
-                const m = Math.floor((remaining % 3600000) / 60000);
-                const s = Math.floor((remaining % 60000) / 1000);
-                displayText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                displayColor = '#ED62ED';
-            }
-            if (p.timerStatus === 'paused') {
-                displayColor = '#ff4d4d';
-            }
-            return `<div class="timer-display" style="color: ${displayColor};">${displayText}</div>`;
-        } 
-        else {
-            if (streakInfo.missedStreak > 0) {
-                return `<div class="streak">未打卡${streakInfo.missedStreak}天</div>`;
+        if (p.timerStatus === 'paused') {
+            displayColor = '#ff4d4d';
+        }
+        return `<div class="timer-display" style="color: ${displayColor};">${displayText}</div>`;
+    }
+    
+    if (p.enableTimer) {
+        if (maxPunches === 0) {
+            return `<div class="streak">已打卡 ${todayPunches} 次</div>`;
+        }
+        if (isDoneToday) {
+            if (streakInfo.currentStreak > 0) {
+                return `<div class="streak">已打卡${streakInfo.currentStreak}天</div>`;
             } else {
-                return `<div class="streak" style="visibility: hidden;">&nbsp;</div>`;
+                return `<div class="streak">已完成</div>`;
             }
-        }
-    } 
-    else {
-        if (p.dailyTimes && p.dailyTimes > 1) {
-            if (todayPunches > 0) {
+        } else {
+            if (maxPunches > 1) {
                 return `<div class="streak">${todayPunches}/${maxPunches}次</div>`;
             } else {
                 if (streakInfo.missedStreak > 0) {
                     return `<div class="streak">未打卡${streakInfo.missedStreak}天</div>`;
                 } else {
-                    return `<div class="streak">${todayPunches}/${maxPunches}次</div>`;
+                    return `<div class="streak" style="visibility: hidden;">&nbsp;</div>`;
                 }
             }
-        } 
-        else {
-            if (isOnceEnded) {
-                return `<div class="streak">计划已结束</div>`;
-            } else if (streakInfo.currentStreak > 0) {
-                return `<div class="streak">已打卡${streakInfo.currentStreak}天</div>`;
-            } else if (streakInfo.missedStreak > 0 && !isDoneToday) {
+        }
+    }
+    
+    if (maxPunches === 0) {
+        return `<div class="streak">已打卡 ${todayPunches} 次</div>`;
+    }
+    
+    if (isDoneToday) {
+        if (streakInfo.currentStreak > 0) {
+            return `<div class="streak">已打卡${streakInfo.currentStreak}天</div>`;
+        } else {
+            return `<div class="streak">已完成</div>`;
+        }
+    } else {
+        if (p.dailyTimes && p.dailyTimes > 1) {
+            return `<div class="streak">${todayPunches}/${maxPunches}次</div>`;
+        } else {
+            if (streakInfo.missedStreak > 0) {
                 return `<div class="streak">未打卡${streakInfo.missedStreak}天</div>`;
             } else {
                 return `<div class="streak" style="visibility: hidden;">&nbsp;</div>`;
@@ -1930,11 +1839,99 @@ function updateCardTimerUI(cardLi, p) {
     }
 }
 
+function undoTodayPunch(punch) {
+  if (!punch) return;
+  
+  const today = getTodayDateString();
+  if (!punch.history) punch.history = {};
+  
+  let todayRecord = punch.history[today];
+  if (!todayRecord) {
+    return;
+  }
+  
+  const maxPunches = (punch.dailyTimes === 0) ? 0 : (punch.dailyTimes || 1);
+  todayRecord.maxPunches = maxPunches;
+  let currentPunches = todayRecord.punches || 0;
+  
+  if (punch.dailyTimes === 0) {
+    if (currentPunches === 0) return;
+  } else if (punch.dailyTimes && punch.dailyTimes > 1) {
+    if (currentPunches === 0) return;
+  } else {
+    if (!todayRecord.checked) return;
+  }
+  
+  if (punch.enableTimer) {
+    removeTimerSessionsForDate(punch.id, today);
+  }
+  
+  if (punch.dailyTimes === 0) {
+    const newPunches = Math.max(0, currentPunches - 1);
+    todayRecord.punches = newPunches;
+    todayRecord.checked = false;
+    todayRecord.lastUpdate = getCurrentTimeString();
+    if (newPunches === 0) {
+      todayRecord.checkedTime = null;
+    }
+  } 
+  else if (punch.dailyTimes && punch.dailyTimes > 1) {
+    const newPunches = Math.max(0, currentPunches - 1);
+    todayRecord.punches = newPunches;
+    todayRecord.checked = (newPunches >= maxPunches);
+    todayRecord.lastUpdate = getCurrentTimeString();
+    if (newPunches === 0) {
+      todayRecord.checkedTime = null;
+    }
+  } 
+  else {
+    todayRecord.checked = false;
+    todayRecord.checkedTime = null;
+    todayRecord.punches = 0;
+    todayRecord.lastUpdate = getCurrentTimeString();
+  }
+  
+  if (punch.enableTimer) {
+    if (punch.timerInterval) {
+      clearInterval(punch.timerInterval);
+      punch.timerInterval = null;
+    }
+    punch.timer = null;
+    punch.timerStatus = 'init';
+    punch.timed = false;
+    punch.timerStartTime = null;
+    punch.pauseSegments = [];
+    punch.pauseStartTime = null;
+  }
+  
+  if (punch.frequency === 'once') {
+    punch.forceActive = true;
+  }
+  
+  saveAndRender();
+  
+  if (calendarSection && calendarSection.classList.contains('active')) {
+    renderCalendar();
+  }
+  
+  if (timeSection && timeSection.classList.contains('active')) {
+    renderTimeSummaryForDate(currentTimeViewDate);
+  }
+  
+  if (dayDetailsModal && dayDetailsModal.style.display === 'flex' && selectedDateForDetails === today) {
+    const date = new Date(today);
+    const dayData = getDayPunchData(today);
+    showDayDetails(date, today, dayData);
+  }
+}
+
 function bindSwipeAnimation(cardLi, punch) {
-  if (!punch.enableTimer) return;
   let startX = 0, startY = 0;
   let isSwiping = false;
+  let swipeDeltaX = 0;
   let animationFrame = null;
+  const maxSwipe = 80;
+
   const resetTransform = () => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     cardLi.style.transition = 'transform 0.2s ease-out';
@@ -1943,27 +1940,30 @@ function bindSwipeAnimation(cardLi, punch) {
       cardLi.style.transition = '';
     }, 200);
   };
+
   const animateSwipe = (deltaX) => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     animationFrame = requestAnimationFrame(() => {
-      const maxSwipe = -80;
-      let newX = Math.max(maxSwipe, Math.min(0, deltaX));
+      let newX = Math.max(-maxSwipe, Math.min(maxSwipe, deltaX));
       cardLi.style.transform = `translateX(${newX}px)`;
       animationFrame = null;
     });
   };
+
   const onTouchStart = (e) => {
     if (editMode) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     isSwiping = false;
+    swipeDeltaX = 0;
     cardLi.style.transition = 'none';
   };
+
   const onTouchMove = (e) => {
     if (editMode) return;
     const deltaX = e.touches[0].clientX - startX;
     const deltaY = e.touches[0].clientY - startY;
-    if (!isSwiping && Math.abs(deltaX) > Math.abs(deltaY) && deltaX < -10) {
+    if (!isSwiping && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
       isSwiping = true;
       e.preventDefault();
       animateSwipe(deltaX);
@@ -1971,54 +1971,106 @@ function bindSwipeAnimation(cardLi, punch) {
       e.preventDefault();
       animateSwipe(deltaX);
     }
+    swipeDeltaX = deltaX;
   };
+
   const onTouchEnd = (e) => {
     if (editMode) return;
     if (isSwiping) {
       const deltaX = e.changedTouches[0].clientX - startX;
       if (deltaX < -30) {
-        openTomatoModal(punch);
+        if (punch.enableTimer) {
+          openTomatoModal(punch);
+        }
+        resetTransform();
       }
-      resetTransform();
+      else if (deltaX > 30) {
+        e.preventDefault();
+        e.stopPropagation();
+        const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
+        if (isEndedOnce) {
+          if (confirm("确定要恢复该计划吗？恢复后可以重新打卡。")) {
+            punch.forceActive = true;
+            saveAndRender();
+          }
+        } else {
+          if (canUndoToday(punch)) {
+            if (confirm("确定要撤销打卡吗？")) {
+              undoTodayPunch(punch);
+            }
+          }
+        }
+        resetTransform();
+      } else {
+        resetTransform();
+      }
     }
     isSwiping = false;
     cardLi.style.transition = '';
   };
+
   cardLi.addEventListener('touchstart', onTouchStart, { passive: false });
   cardLi.addEventListener('touchmove', onTouchMove, { passive: false });
   cardLi.addEventListener('touchend', onTouchEnd);
   cardLi.addEventListener('touchcancel', resetTransform);
+
   let mouseStartX = 0, mouseStartY = 0;
   let mouseSwiping = false;
+  let mouseDeltaX = 0;
+
   cardLi.addEventListener('mousedown', (e) => {
     if (editMode) return;
     mouseStartX = e.clientX;
     mouseStartY = e.clientY;
     mouseSwiping = false;
+    mouseDeltaX = 0;
     cardLi.style.transition = 'none';
+
     const onMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - mouseStartX;
       const deltaY = moveEvent.clientY - mouseStartY;
-      if (!mouseSwiping && Math.abs(deltaX) > Math.abs(deltaY) && deltaX < -10) {
+      if (!mouseSwiping && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
         mouseSwiping = true;
         animateSwipe(deltaX);
       } else if (mouseSwiping) {
         animateSwipe(deltaX);
       }
+      mouseDeltaX = deltaX;
     };
+
     const onMouseUp = (upEvent) => {
       if (mouseSwiping) {
         const deltaX = upEvent.clientX - mouseStartX;
         if (deltaX < -30) {
-          openTomatoModal(punch);
+          if (punch.enableTimer) {
+            openTomatoModal(punch);
+          }
+          resetTransform();
+        } else if (deltaX > 30) {
+          const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
+          if (isEndedOnce) {
+            if (confirm("确定要恢复该计划吗？恢复后可以重新打卡。")) {
+              punch.forceActive = true;
+              saveAndRender();
+            }
+          } else {
+            if (canUndoToday(punch)) {
+              if (confirm("确定要撤销打卡吗？")) {
+                undoTodayPunch(punch);
+              }
+            }
+          }
+          resetTransform();
+        } else {
+          resetTransform();
         }
-        resetTransform();
       }
       mouseSwiping = false;
       cardLi.style.transition = '';
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
+
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   });
@@ -2051,30 +2103,20 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
-  const activeCards = [];    // 未完成组
-  const completedCards = []; // 已完成/已计时组
-  
+  const visibleCards = [];
   for (const p of punches) {
-    if (!shouldShowPunch(p)) {
-      continue;
-    }
-    const isDone = isPunchDoneToday(p);
-    const isTimed = p.timed === true;
-    if (isDone || isTimed) {
-      completedCards.push(p);
-    } else {
-      activeCards.push(p);
+    if (shouldShowPunch(p)) {
+      visibleCards.push(p);
     }
   }
-  const sorted = [...activeCards, ...completedCards];
   
-  for (const p of sorted) {
+  for (const p of visibleCards) {
     const streakInfo = calculateStreak(p);
 
     const today = getTodayDateString();
     const todayRecord = p.history[today] || {};
     const todayPunches = todayRecord.punches || 0;
-    const maxPunches = todayRecord.maxPunches || p.dailyTimes || 1;
+    const maxPunches = p.dailyTimes === 0 ? 0 : (todayRecord.maxPunches || p.dailyTimes || 1);
 
     const isDoneToday = isPunchDoneToday(p);
     const isInPeriod = isInCurrentPeriod(p);
@@ -2089,7 +2131,7 @@ async function renderPunchList(forceRender = false) {
     }
 
     if (editMode) li.classList.add('edit-mode');
-    if (isDoneToday || p.timed) li.classList.add('done');
+    if (isDoneToday) li.classList.add('done');
     if (p.desc && p.desc.length > 50) li.classList.add('long-desc');
     
     let reminderHTML = '';
@@ -2207,86 +2249,34 @@ async function renderPunchList(forceRender = false) {
         const today = getTodayDateString();
 
         if (p.frequency === 'once' && !isDoneToday && !p.timed && isPlanActuallyEnded(p)) {
-            if (confirm("确定要恢复该计划吗？")) {
-                p.forceActive = true;
-                saveAndRender();
-                showToast("计划已恢复，现在可以重新打卡了");
-                clickCount = 0;
-                return;
-            } else {
-                clickCount = 0;
-                return;
-            }
-        }
-
-        if (!isDoneToday && !p.timed && !isInCurrentPeriod(p)) {
-          alert('不在计划周期内，无法打卡');
           clickCount = 0;
           return;
         }
 
-        if (p.timed || isDoneToday) {
-          let confirmMsg = '';
+        if (!isDoneToday && !isInCurrentPeriod(p)) {
+          clickCount = 0;
+          return;
+        }
+
+        if (isDoneToday) {
+          clickCount = 0;
+          return;
+        }
         
-          if (p.frequency === 'once' && isPlanActuallyEnded(p)) {
-            confirmMsg = '确定要取消已结束吗？';
-          } else {
-            confirmMsg = p.timed ? '确定要取消已计时吗？' : '确定要撤销打卡吗？';
-          }
-          
-          if (confirm(confirmMsg)) {
-            if (p.timerInterval) {
-              clearInterval(p.timerInterval);
-            }
-            p.timer = null;
-            p.timerStatus = 'init';
-            p.paused = false;
-            p.timed = false;
-            
-            // 清除计时分段相关字段
-            p.timerStartTime = null;
-            p.pauseSegments = [];
-            p.pauseStartTime = null;
-
-            if (p.enableTimer) {
-              removeTimerSessionsForToday(p.id, p.name);
-            }
-
-            initPunchHistory(p);
-            if (p.dailyTimes && p.dailyTimes > 1) {
-              p.history[today].punches = 0;
-              p.history[today].checked = false;
-            } else {
-              p.history[today] = {
-                checked: false,
-                checkedTime: null,
-                lastUpdate: getCurrentTimeString(),
-                punches: 0,
-                maxPunches: p.dailyTimes || 1
-              };
-            }
-
-            saveAndRender();
-          }
-        } 
-        else if (p.enableTimer) {
+        if (p.enableTimer) {
           if (clickCount === 1) {
-            // 单击：开始/暂停计时
             if (!p.timer) {
-              // 首次开始计时
               p.timer = { 
                 elapsed: 0,
                 startTime: Date.now(),
                 updateCount: 0
               };
               p.timerStatus = 'running';
-              p.timerStartTime = Date.now();  // 记录开始时间
+              p.timerStartTime = Date.now();
               p.pauseSegments = [];
               p.pauseStartTime = null;
             } else if (p.timerStatus === 'init' || p.timerStatus === 'paused') {
-              // 从暂停恢复，记录恢复时间
               if (p.pauseStartTime) {
-                // 暂停结束，记录暂停区间
                 p.pauseSegments.push({
                   start: p.pauseStartTime,
                   end: Date.now()
@@ -2297,75 +2287,32 @@ async function renderPunchList(forceRender = false) {
               p.timerStatus = 'running';
               checkCountdownCompletion(p);
             } else if (p.timerStatus === 'running') {
-              // 暂停计时
               if (p.timer.startTime) {
                 p.timer.elapsed = Date.now() - p.timer.startTime;
               }
               p.timerStatus = 'paused';
-              p.pauseStartTime = Date.now();  // 记录暂停开始时间
+              p.pauseStartTime = Date.now();
             }
             
             saveToLocalStorage();
             updateCardTimerUI(li, p);
           } else if (clickCount === 2) {
-            // 双击：完成计时
-            if (p.timerInterval) {
-              clearInterval(p.timerInterval);
-            }
-            
-            // 确保计时分段完整：如果当前处于暂停状态，需要先闭合暂停区间
-            if (p.pauseStartTime) {
-              p.pauseSegments.push({
-                start: p.pauseStartTime,
-                end: Date.now()
-              });
-              p.pauseStartTime = null;
-            }
-            
-            // 生成分段记录并保存
-            const parentId = buildAndSaveSegmentsFromTimer(p);
-            
-            p.timed = true;
-            p.timerStatus = 'init';
-            p.paused = false;
-            
-            p.timer = null;
-            initPunchHistory(p);
-            p.history[today] = {
-              checked: true,
-              checkedTime: getCurrentTimeString(),
-              lastUpdate: getCurrentTimeString(),
-              isTimed: true,
-              punches: 1,
-              maxPunches: p.dailyTimes || 1
-            };
-            if (p.frequency === 'once' && p.forceActive === true) {
-                p.forceActive = false;
-            }
-            playPunchSound();
-            
-            saveAndRender();
+            completeTimerPunch(p);
           }
         } 
         else {
           const today = getTodayDateString();
           initPunchHistory(p);
 
-          if (p.dailyTimes && p.dailyTimes > 1) {
-            if (isDoneToday) {
-              if (confirm("确定要取消已打卡吗？所有今天打卡次数将被重置")) {
-                p.history[today].punches = 0;
-                p.history[today].checked = false;
-                p.history[today].checkedTime = null;
-                saveAndRender();
-              }
-            } else {
+          if (p.dailyTimes !== 1) {
+            if (!isDoneToday) {
               p.history[today].punches = (p.history[today].punches || 0) + 1;
               p.history[today].lastUpdate = getCurrentTimeString();
 
               playPunchSound();
 
-              if (p.history[today].punches >= (p.history[today].maxPunches || p.dailyTimes || 1)) {
+              const maxPunches = p.history[today].maxPunches || p.dailyTimes || 1;
+              if (p.dailyTimes !== 0 && p.history[today].punches >= maxPunches) {
                 p.history[today].checked = true;
                 p.history[today].checkedTime = getCurrentTimeString();
                 if (p.frequency === 'once' && p.forceActive === true) {
@@ -2376,20 +2323,7 @@ async function renderPunchList(forceRender = false) {
               saveAndRender();
             }
           } else {
-            if (isDoneToday) {
-              let confirmMsg = '';
-              if (p.frequency === 'once') {
-                confirmMsg = "确定要取消已结束吗？";
-              } else {
-                confirmMsg = "确定要取消已打卡吗？";
-              }
-              
-              if (confirm(confirmMsg)) {
-                p.history[today].checked = false;
-                p.history[today].checkedTime = null;
-                saveAndRender();
-              }
-            } else {
+            if (!isDoneToday) {
               p.history[today].checked = true;
               p.history[today].checkedTime = getCurrentTimeString();
 
@@ -2569,6 +2503,10 @@ function isPunchDoneToday(p) {
   const todayRecord = p.history[today];
   if (!todayRecord) return false;
 
+  if (p.dailyTimes === 0) {
+    return false;
+  }
+
   if (p.dailyTimes && p.dailyTimes > 1) {
     const maxPunches = todayRecord.maxPunches || p.dailyTimes || 1;
     return (todayRecord.punches || 0) >= maxPunches;
@@ -2656,15 +2594,6 @@ function saveAndRender() {
           timed: p.timed || false,
           countdown: p.countdown || null,
           history: p.history || {},
-          customInterval: p.customInterval,
-          customUnit: p.customUnit,
-          customWeekdays: p.customWeekdays,
-          customMonthDayType: p.customMonthDayType,
-          customDayOfMonth: p.customDayOfMonth,
-          customWeekNumber: p.customWeekNumber,
-          customWeekday: p.customWeekday,
-          customMonthOfYear: p.customMonthOfYear,
-          customDayOfYear: p.customDayOfYear,
           forceActive: p.forceActive || false,
           timerStartTime: p.timerStartTime || null,
           pauseSegments: p.pauseSegments || [],
@@ -2703,13 +2632,6 @@ const uploadIconBtn = document.getElementById('upload-icon-btn');
 const iconUploadInput = document.getElementById('icon-upload-input');
 const recentIconsContainer = document.getElementById('recent-icons-container');
 let currentIcon = '📋';
-
-const customFrequencyContainer = document.getElementById('custom-frequency-container');
-const customUnit = document.getElementById('custom-unit');
-const customWeekdaysContainer = document.getElementById('custom-weekdays-container');
-const customMonthdayContainer = document.getElementById('custom-monthday-container');
-const customMonthdayType = document.getElementById('custom-monthday-type');
-const customWeekdaysBtns = customWeekdaysContainer ? customWeekdaysContainer.querySelectorAll('.weekdays button') : [];
 
 let countdownWheel = null;
 
@@ -3028,96 +2950,10 @@ if (planFrequency) {
     });
 
     if (weekdaysContainer) weekdaysContainer.style.display = value === 'weekly' ? 'block' : 'none';
-    if (customFrequencyContainer) customFrequencyContainer.style.display = value === 'custom' ? 'block' : 'none';
     if (dailyTimesContainer) dailyTimesContainer.style.display = value === 'daily' ? 'block' : 'none';
 
     selectedDays = [];
-    customWeekdays = [];
     weekdaysBtns.forEach(b => b.classList.remove('active'));
-    if (value === 'custom') {
-      const unit = customUnit.value;
-      updateCustomFrequencyUI(unit);
-    }
-  };
-}
-
-function updateCustomFrequencyUI(unit) {
-  const weekdaysContainer = document.getElementById('custom-weekdays-container');
-  const monthDayContainer = document.getElementById('custom-monthday-container');
-  const yearDayContainer = document.getElementById('custom-yearday-container');
-  const monthDayType = document.getElementById('custom-monthday-type');
-  const specificDay = document.getElementById('custom-specific-day');
-  const weekdayOption = document.getElementById('custom-weekday-option');
-
-  if (!weekdaysContainer || !monthDayContainer) return;
-
-  switch(unit) {
-    case 'days':
-      weekdaysContainer.style.display = 'none';
-      monthDayContainer.style.display = 'none';
-      if (yearDayContainer) yearDayContainer.style.display = 'none';
-      break;
-    case 'weeks':
-      weekdaysContainer.style.display = 'block';
-      monthDayContainer.style.display = 'none';
-      if (yearDayContainer) yearDayContainer.style.display = 'none';
-      break;
-    case 'months':
-      weekdaysContainer.style.display = 'none';
-      monthDayContainer.style.display = 'block';
-      if (yearDayContainer) yearDayContainer.style.display = 'none';
-      if (monthDayType) {
-        if (monthDayType.value === 'day') {
-          if (specificDay) specificDay.style.display = 'flex';
-          if (weekdayOption) weekdayOption.style.display = 'none';
-        } else {
-          if (specificDay) specificDay.style.display = 'none';
-          if (weekdayOption) weekdayOption.style.display = 'flex';
-        }
-      }
-      break;
-    case 'years':
-      weekdaysContainer.style.display = 'none';
-      monthDayContainer.style.display = 'none';
-      if (yearDayContainer) yearDayContainer.style.display = 'block';
-      break;
-  }
-}
-
-if (customUnit) {
-  customUnit.onchange = () => {
-    const unit = customUnit.value;
-    updateCustomFrequencyUI(unit);
-  };
-}
-
-if (customWeekdaysBtns.length > 0) {
-  customWeekdaysBtns.forEach(btn => {
-    btn.onclick = () => {
-      btn.classList.toggle('active');
-      const day = parseInt(btn.dataset.day);
-      if (btn.classList.contains('active')) {
-        customWeekdays.push(day);
-      } else {
-        customWeekdays = customWeekdays.filter(d => d !== day);
-      }
-    };
-  });
-}
-
-if (customMonthdayType) {
-  customMonthdayType.onchange = () => {
-    const type = customMonthdayType.value;
-    const specificDay = document.getElementById('custom-specific-day');
-    const weekdayOption = document.getElementById('custom-weekday-option');
-
-    if (type === 'day') {
-      if (specificDay) specificDay.style.display = 'flex';
-      if (weekdayOption) weekdayOption.style.display = 'none';
-    } else {
-      if (specificDay) specificDay.style.display = 'none';
-      if (weekdayOption) weekdayOption.style.display = 'flex';
-    }
   };
 }
 
@@ -3128,9 +2964,7 @@ weekdaysBtns.forEach(btn => btn.onclick = () => {
   else selectedDays = selectedDays.filter(d => d !== day);
 });
 
-function initCountdownInputs() {
-  // 倒计时控件已改为滚轮，无需额外初始化
-}
+function initCountdownInputs() {}
 
 function isPlanNameDuplicate(name, currentEditingId = null) {
   return false;
@@ -3150,8 +2984,9 @@ if (savePlanBtn) {
 
     const today = getTodayDateString();
 
-    const dailyTimesInput = document.getElementById('daily-times').value;
-    const dailyTimes = planFrequency.value === 'daily' ? (parseInt(dailyTimesInput) || 1) : 1;
+    let dailyTimesValue = parseInt(document.getElementById('daily-times').value);
+    if (isNaN(dailyTimesValue)) dailyTimesValue = 1;
+    const dailyTimes = dailyTimesValue;
 
     let countdownObj = null;
     const timerTypeValue = document.getElementById('timer-type').value;
@@ -3160,15 +2995,6 @@ if (savePlanBtn) {
       if (countdownWheel) {
         hours = countdownWheel.getHour();
         minutes = countdownWheel.getMinute();
-      } else {
-        const durationInput = document.getElementById('countdown-duration');
-        if (durationInput && durationInput.value) {
-          const parts = durationInput.value.split(':');
-          if (parts.length === 2) {
-            hours = parseInt(parts[0]) || 0;
-            minutes = parseInt(parts[1]) || 0;
-          }
-        }
       }
       countdownObj = {
         h: hours,
@@ -3178,6 +3004,8 @@ if (savePlanBtn) {
     }
 
     const processedIcon = await processImageData(currentIcon);
+
+    const maxPunchesVal = dailyTimes === 0 ? 0 : dailyTimes;
 
     const plan = {
       name,
@@ -3201,7 +3029,7 @@ if (savePlanBtn) {
           checkedTime: null,
           lastUpdate: getCurrentTimeString(),
           punches: 0,
-          maxPunches: dailyTimes
+          maxPunches: maxPunchesVal
         }
       },
       forceActive: false,
@@ -3219,25 +3047,6 @@ if (savePlanBtn) {
       iconType: plan.icon.startsWith('db:') ? 'IndexedDB图片' : (plan.icon.startsWith('data:image') ? 'Base64图片' : 'emoji')
     });
 
-    if (planFrequency.value === 'custom') {
-      plan.customInterval = parseInt(document.getElementById('custom-interval').value) || 1;
-      plan.customUnit = document.getElementById('custom-unit').value;
-      if (plan.customUnit === 'weeks') {
-        plan.customWeekdays = [...customWeekdays];
-      } else if (plan.customUnit === 'months') {
-        plan.customMonthDayType = document.getElementById('custom-monthday-type').value;
-        if (plan.customMonthDayType === 'day') {
-          plan.customDayOfMonth = parseInt(document.getElementById('custom-day-of-month').value) || 1;
-        } else {
-          plan.customWeekNumber = parseInt(document.getElementById('custom-week-number').value) || 1;
-          plan.customWeekday = parseInt(document.getElementById('custom-weekday').value) || 1;
-        }
-      } else if (plan.customUnit === 'years') {
-        plan.customMonthOfYear = parseInt(document.getElementById('custom-month-of-year').value) || 1;
-        plan.customDayOfYear = parseInt(document.getElementById('custom-day-of-year').value) || 1;
-      }
-    }
-
     if (editingIndex !== null) {
       const existingHistory = punches[editingIndex].history || {};
       const existingTimer = punches[editingIndex].timer;
@@ -3249,7 +3058,7 @@ if (savePlanBtn) {
       if (existingHistory[today]) {
         mergedHistory[today] = {
           ...existingHistory[today],
-          maxPunches: dailyTimes
+          maxPunches: maxPunchesVal
         };
       }
 
@@ -3260,7 +3069,6 @@ if (savePlanBtn) {
       plan.id = existingId;
       plan.forceActive = punches[editingIndex].forceActive || false;
       
-      // 保留计时分段相关字段
       plan.timerStartTime = punches[editingIndex].timerStartTime || null;
       plan.pauseSegments = punches[editingIndex].pauseSegments || [];
       plan.pauseStartTime = punches[editingIndex].pauseStartTime || null;
@@ -3407,57 +3215,7 @@ async function showNewPlanPage(plan) {
       });
     }
 
-    if (plan.frequency === 'custom') {
-      if (plan.customInterval) {
-        document.getElementById('custom-interval').value = plan.customInterval;
-      }
-
-      if (plan.customUnit) {
-        const unitSelect = document.getElementById('custom-unit');
-        unitSelect.value = plan.customUnit;
-        updateCustomFrequencyUI(plan.customUnit);
-
-        if (plan.customUnit === 'weeks' && plan.customWeekdays) {
-          customWeekdays = [...plan.customWeekdays];
-          customWeekdaysBtns.forEach(btn => {
-            const day = parseInt(btn.dataset.day);
-            if (plan.customWeekdays.includes(day)) {
-              btn.classList.add('active');
-            }
-          });
-        }
-
-        if (plan.customUnit === 'months') {
-          if (plan.customMonthDayType) {
-            document.getElementById('custom-monthday-type').value = plan.customMonthDayType;
-            if (plan.customMonthDayType === 'day' && plan.customDayOfMonth) {
-              document.getElementById('custom-day-of-month').value = plan.customDayOfMonth;
-            } else if (plan.customMonthDayType === 'weekday') {
-              if (plan.customWeekNumber) {
-                document.getElementById('custom-week-number').value = plan.customWeekNumber;
-              }
-              if (plan.customWeekday) {
-                document.getElementById('custom-weekday').value = plan.customWeekday;
-              }
-            }
-
-            const event = new Event('change');
-            document.getElementById('custom-monthday-type').dispatchEvent(event);
-          }
-        }
-
-        if (plan.customUnit === 'years') {
-          if (plan.customMonthOfYear) {
-            document.getElementById('custom-month-of-year').value = plan.customMonthOfYear;
-          }
-          if (plan.customDayOfYear) {
-            document.getElementById('custom-day-of-year').value = plan.customDayOfYear;
-          }
-        }
-      }
-    }
-
-    if (plan.dailyTimes) {
+    if (plan.dailyTimes !== undefined) {
       document.getElementById('daily-times').value = plan.dailyTimes;
     }
 
@@ -3523,14 +3281,6 @@ async function resetPlanPage() {
   weekdaysBtns.forEach(b => b.classList.remove('active'));
   document.getElementById('daily-times').value = '1';
   document.getElementById('reminder-time').value = '';
-  if (customFrequencyContainer) {
-    customFrequencyContainer.style.display = 'none';
-  }
-
-  customWeekdays = [];
-  if (customWeekdaysBtns.length > 0) {
-    customWeekdaysBtns.forEach(b => b.classList.remove('active'));
-  }
 
   if (editingIndex === null) {
     if (recentIcons.length > 0) {
@@ -3710,9 +3460,9 @@ function createCalendarDay(date, isOtherMonth, today) {
   }
 
   const dayData = getDayPunchData(dateString);
-  const totalPlans = dayData.totalPlans;
-  const completedPlans = dayData.completedPlans;
-  const completionRate = totalPlans > 0 ? Math.round((completedPlans / totalPlans) * 100) : 0;
+  let totalPlans = dayData.totalPlans;
+  let completedPlans = dayData.completedPlans;
+  let completionRate = totalPlans > 0 ? Math.round((completedPlans / totalPlans) * 100) : 0;
 
   const dayNumberElement = document.createElement('div');
   dayNumberElement.className = 'day-number';
@@ -3757,6 +3507,10 @@ function getDayPunchData(dateString) {
     const dayRecord = punch.history && punch.history[dateString];
 
     if (dayRecord) {
+      if (punch.dailyTimes === 0) {
+        return;
+      }
+      
       totalPlans++;
 
       let isCompleted = false;
@@ -3960,7 +3714,10 @@ function retroactivePunch(itemIndex, dateString) {
     lastUpdate: getCurrentTimeString()
   };
 
-  if (punch.dailyTimes && punch.dailyTimes > 1) {
+  if (punch.dailyTimes === 0) {
+    dayRecord.punches++;
+    dayRecord.checked = false;
+  } else if (punch.dailyTimes && punch.dailyTimes > 1) {
     dayRecord.punches = dayRecord.maxPunches;
     dayRecord.checked = true;
   } else {
@@ -3977,8 +3734,6 @@ function retroactivePunch(itemIndex, dateString) {
   const date = new Date(dateString);
   const dayData = getDayPunchData(dateString);
   showDayDetails(date, dateString, dayData);
-
-  showToast('补签成功');
 }
 
 function undoPunch(itemIndex, dateString) {
@@ -3996,7 +3751,36 @@ function undoPunch(itemIndex, dateString) {
 
   const punch = item.punch;
 
-  if (punch.dailyTimes && punch.dailyTimes > 1) {
+  if (punch.dailyTimes === 0) {
+    if (!item.punches || item.punches === 0) {
+      alert('该计划今日尚未打卡，无需撤销');
+      return;
+    }
+
+    if (!confirm(`确定要撤销 ${dateString} 的"${item.name}"计划的1次打卡吗？\n当前: ${item.punches}次`)) {
+      return;
+    }
+
+    if (!punch.history || !punch.history[dateString]) {
+      alert('该日期没有打卡记录');
+      return;
+    }
+
+    const dayRecord = punch.history[dateString];
+    const newPunches = Math.max(0, dayRecord.punches - 1);
+    dayRecord.punches = newPunches;
+    dayRecord.checked = false;
+    dayRecord.lastUpdate = getCurrentTimeString();
+    if (newPunches === 0) {
+      dayRecord.checkedTime = null;
+    }
+
+    saveAndRender();
+
+    const date = new Date(dateString);
+    const dayData = getDayPunchData(dateString);
+    showDayDetails(date, dateString, dayData);
+  } else if (punch.dailyTimes && punch.dailyTimes > 1) {
     if (!item.punches || item.punches === 0) {
       alert('该计划今日尚未打卡，无需撤销');
       return;
@@ -4025,8 +3809,6 @@ function undoPunch(itemIndex, dateString) {
     const date = new Date(dateString);
     const dayData = getDayPunchData(dateString);
     showDayDetails(date, dateString, dayData);
-
-    showToast(`打卡已撤销，剩余 ${newPunches}/${dayRecord.maxPunches}次`);
   } else {
     if (!item.isCompleted) {
       alert('该计划未打卡，无需撤销');
@@ -4052,8 +3834,6 @@ function undoPunch(itemIndex, dateString) {
       const date = new Date(dateString);
       const dayData = getDayPunchData(dateString);
       showDayDetails(date, dateString, dayData);
-
-      showToast('打卡记录已撤销');
     } else {
       alert('该日期没有打卡记录');
     }
@@ -4548,53 +4328,6 @@ function openEditTimerModal(sessionOrParentId, sessionsList) {
   renderCardCapsules('edit-card-capsule-container', cardId, false);
   editTimerModal.style.display = 'flex';
   editTimeWarning.style.display = 'none';
-}
-
-function updatePunchStatusFromSessions(cardId, date) {
-  const punchesToUpdate = punches.filter(p => p.id === cardId);
-  if (punchesToUpdate.length === 0) return;
-
-  const sessionsForCard = timerSessions.filter(s => s.date === date && s.cardId === cardId);
-  const hasSessions = sessionsForCard.length > 0;
-
-  punchesToUpdate.forEach(punch => {
-    initPunchHistory(punch);
-    if (!punch.history[date]) {
-      punch.history[date] = {
-        checked: false,
-        checkedTime: null,
-        lastUpdate: getCurrentTimeString(),
-        punches: 0,
-        maxPunches: punch.dailyTimes || 1
-      };
-    }
-    const dayRecord = punch.history[date];
-    if (hasSessions) {
-      dayRecord.checked = true;
-      dayRecord.isTimed = true;
-      dayRecord.checkedTime = dayRecord.checkedTime || getCurrentTimeString();
-      dayRecord.lastUpdate = getCurrentTimeString();
-      dayRecord.punches = dayRecord.maxPunches || 1;
-      if (punch.enableTimer) {
-        punch.timer = null;
-        punch.timerStatus = 'init';
-        punch.timed = false;
-      }
-    } else {
-      if (dayRecord.isTimed) {
-        dayRecord.checked = false;
-        dayRecord.isTimed = false;
-        dayRecord.checkedTime = null;
-        dayRecord.lastUpdate = getCurrentTimeString();
-        dayRecord.punches = 0;
-        if (punch.enableTimer) {
-          punch.timer = null;
-          punch.timerStatus = 'init';
-          punch.timed = false;
-        }
-      }
-    }
-  });
 }
 
 function saveNewTimerRecord() {
@@ -5291,12 +5024,10 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings');
 const hideInactivePlansCheckbox = document.getElementById('hide-inactive-plans');
-const clearJournalDataCheckbox = document.getElementById('clear-journal-data');
 
 if (settingsBtn) {
   settingsBtn.onclick = () => {
     if (hideInactivePlansCheckbox) hideInactivePlansCheckbox.checked = hideInactivePlans;
-    if (clearJournalDataCheckbox) clearJournalDataCheckbox.checked = clearJournalData;
     if (settingsModal) settingsModal.style.display = 'flex';
   };
 }
@@ -5316,16 +5047,11 @@ if (settingsModal) {
 
 function autoSaveSettings() {
   const newHideInactive = hideInactivePlansCheckbox.checked;
-  const newClearJournal = clearJournalDataCheckbox.checked;
   let needRefresh = false;
   if (newHideInactive !== hideInactivePlans) {
     hideInactivePlans = newHideInactive;
     localStorage.setItem('hideInactivePlans', JSON.stringify(hideInactivePlans));
     needRefresh = true;
-  }
-  if (newClearJournal !== clearJournalData) {
-    clearJournalData = newClearJournal;
-    localStorage.setItem('clearJournalData', JSON.stringify(clearJournalData));
   }
   if (needRefresh) {
     saveAndRender();
@@ -5340,9 +5066,6 @@ function autoSaveSettings() {
 
 if (hideInactivePlansCheckbox) {
   hideInactivePlansCheckbox.addEventListener('change', autoSaveSettings);
-}
-if (clearJournalDataCheckbox) {
-  clearJournalDataCheckbox.addEventListener('change', autoSaveSettings);
 }
 
 if (closeEditTimerBtn) {
@@ -5491,21 +5214,25 @@ function updateHeaderButtons() {
     punchHeaderButtons.style.display = 'flex';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'none';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (timeSection && timeSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'flex';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (calendarSection && calendarSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'flex';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (journalSection && journalSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'none';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'flex';
+    if (journalSettingsBtn) journalSettingsBtn.style.display = 'flex';
     document.getElementById('header').classList.add('journal-header');
   }
 }
@@ -5729,26 +5456,7 @@ function startTomatoTimer() {
         if (elapsed >= totalMs) {
           const today = getTodayDateString();
           if (!isPunchDoneToday(currentTomatoPunch)) {
-            // 生成分段记录
-            buildAndSaveSegmentsFromTimer(currentTomatoPunch);
-            currentTomatoPunch.timed = true;
-            currentTomatoPunch.timerStatus = 'init';
-            currentTomatoPunch.timer = null;
-            initPunchHistory(currentTomatoPunch);
-            currentTomatoPunch.history[today] = {
-              checked: true,
-              checkedTime: getCurrentTimeString(),
-              lastUpdate: getCurrentTimeString(),
-              isTimed: true,
-              punches: 1,
-              maxPunches: currentTomatoPunch.dailyTimes || 1
-            };
-            if (currentTomatoPunch.frequency === 'once' && currentTomatoPunch.forceActive === true) {
-                currentTomatoPunch.forceActive = false;
-            }
-            saveToLocalStorage();
-            renderPunchList(true);
-            showToast('🍅 番茄钟完成，自动打卡！');
+            completeTimerPunch(currentTomatoPunch);
             closeTomatoModal();
             return;
           }
@@ -5829,26 +5537,7 @@ function tomatoComplete() {
   if (!currentTomatoPunch) return;
   const today = getTodayDateString();
   if (!isPunchDoneToday(currentTomatoPunch)) {
-    // 生成分段记录
-    buildAndSaveSegmentsFromTimer(currentTomatoPunch);
-    currentTomatoPunch.timed = true;
-    currentTomatoPunch.timerStatus = 'init';
-    currentTomatoPunch.timer = null;
-    initPunchHistory(currentTomatoPunch);
-    currentTomatoPunch.history[today] = {
-      checked: true,
-      checkedTime: getCurrentTimeString(),
-      lastUpdate: getCurrentTimeString(),
-      isTimed: true,
-      punches: 1,
-      maxPunches: currentTomatoPunch.dailyTimes || 1
-    };
-    if (currentTomatoPunch.frequency === 'once' && currentTomatoPunch.forceActive === true) {
-        currentTomatoPunch.forceActive = false;
-    }
-    saveToLocalStorage();
-    renderPunchList(true);
-    showToast('✅ 打卡完成！');
+    completeTimerPunch(currentTomatoPunch);
     closeTomatoModal();
   } else {
     showToast('今日已完成打卡');
@@ -6688,6 +6377,116 @@ if (navCalendar) {
     };
 }
 
+// ================== 日记单独导入导出功能 ==================
+const journalSettingsModal = document.getElementById('journal-settings-modal');
+const closeJournalSettingsBtns = document.querySelectorAll('#close-journal-settings, #close-journal-settings-footer');
+const exportJournalBtn = document.getElementById('export-journal-btn');
+const importJournalBtn = document.getElementById('import-journal-btn');
+const importJournalInput = document.getElementById('import-journal-input');
+const clearAllJournalBtn = document.getElementById('clear-all-journal-btn');
+
+function exportJournalData() {
+    try {
+        const exportObj = {
+            version: '2.1',
+            exportDate: new Date().toISOString(),
+            books: books
+        };
+        const dataStr = JSON.stringify(exportObj, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `元气打卡_日记备份_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('日记导出成功！');
+    } catch (err) {
+        console.error(err);
+        showToast('导出失败：' + err.message);
+    }
+}
+
+async function importJournalData(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            let content = e.target.result;
+            if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
+            const imported = JSON.parse(content);
+            if (!imported.books || !Array.isArray(imported.books)) throw new Error('无效的日记备份文件：缺少books数组');
+            if (confirm('导入日记将替换当前所有日记本数据，是否继续？')) {
+                const newBooks = imported.books;
+                books = newBooks;
+                saveBooksToLocal();
+                if (journalSection && journalSection.classList.contains('active')) {
+                    if (notebookView.style.display === 'block') closeNotebookDiary();
+                    renderBookshelfUI();
+                }
+                showToast(`日记导入成功！共 ${books.length} 个日记本`);
+                journalSettingsModal.style.display = 'none';
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('导入失败：' + err.message);
+        }
+    };
+    reader.onerror = () => showToast('读取文件失败');
+    reader.readAsText(file, 'UTF-8');
+}
+
+function clearAllJournals() {
+    if (!confirm('⚠️ 此操作将删除所有日记本及全部日记内容，只保留一本全新空白日记。此操作不可恢复，确定要继续吗？')) return;
+    const defaultBook = {
+        id: Date.now(),
+        name: "我的日记",
+        coverColor: "#faf2e4",
+        pages: [{ id: Date.now()+1, title: "扉页", content: "新的一页，新的开始。", updatedAt: new Date().toISOString() }],
+        currentPageIndex: 0,
+        createdAt: new Date().toISOString()
+    };
+    books = [defaultBook];
+    saveBooksToLocal();
+    if (journalSection && journalSection.classList.contains('active')) {
+        if (notebookView.style.display === 'block') closeNotebookDiary();
+        renderBookshelfUI();
+    }
+    showToast('所有日记已清空，已创建全新默认日记本');
+    journalSettingsModal.style.display = 'none';
+}
+
+if (journalSettingsBtn) {
+    journalSettingsBtn.onclick = () => {
+        if (journalSettingsModal) journalSettingsModal.style.display = 'flex';
+    };
+}
+if (closeJournalSettingsBtns) {
+    closeJournalSettingsBtns.forEach(btn => {
+        btn.onclick = () => { if (journalSettingsModal) journalSettingsModal.style.display = 'none'; };
+    });
+}
+if (journalSettingsModal) {
+    journalSettingsModal.onclick = (e) => {
+        if (e.target === journalSettingsModal) journalSettingsModal.style.display = 'none';
+    };
+}
+if (exportJournalBtn) exportJournalBtn.onclick = exportJournalData;
+if (importJournalBtn) {
+    importJournalBtn.onclick = () => { if (importJournalInput) importJournalInput.click(); };
+}
+if (importJournalInput) {
+    importJournalInput.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            importJournalData(e.target.files[0]);
+            e.target.value = '';
+        }
+    };
+}
+if (clearAllJournalBtn) clearAllJournalBtn.onclick = clearAllJournals;
+
 // ================== 应用初始化 ==================
 async function initApp() {
   try {
@@ -6707,7 +6506,6 @@ async function initApp() {
         }
         if (p.forceActive === undefined) p.forceActive = false;
         
-        // 确保计时分段字段存在
         if (p.timerStartTime === undefined) p.timerStartTime = null;
         if (p.pauseSegments === undefined) p.pauseSegments = [];
         if (p.pauseStartTime === undefined) p.pauseStartTime = null;
@@ -6715,8 +6513,8 @@ async function initApp() {
         initPunchHistory(p);
 
         Object.keys(p.history).forEach(date => {
-          if (!p.history[date].maxPunches) {
-            p.history[date].maxPunches = p.dailyTimes || 1;
+          if (p.history[date].maxPunches === undefined) {
+            p.history[date].maxPunches = (p.dailyTimes === 0) ? 0 : (p.dailyTimes || 1);
           }
         });
       });
@@ -6756,13 +6554,6 @@ async function initApp() {
       cardColorMap = JSON.parse(storedColorMap);
     }
     
-    const storedClearJournal = localStorage.getItem('clearJournalData');
-    if (storedClearJournal !== null) {
-      clearJournalData = JSON.parse(storedClearJournal);
-    } else {
-      clearJournalData = false;
-    }
-    if (clearJournalDataCheckbox) clearJournalDataCheckbox.checked = clearJournalData;
     if (hideInactivePlansCheckbox) hideInactivePlansCheckbox.checked = hideInactivePlans;
   } catch (e) {
     console.error('加载数据时出错:', e);
@@ -6846,7 +6637,7 @@ function resetAllPeriodicPlans() {
             checkedTime: null,
             lastUpdate: getCurrentTimeString(),
             punches: 0,
-            maxPunches: p.dailyTimes || 1
+            maxPunches: (p.dailyTimes === 0) ? 0 : (p.dailyTimes || 1)
           };
         }
       }
@@ -6950,3 +6741,18 @@ document.addEventListener('contextmenu', function(e) {
         setTimeout(window.fixKeyboardLayout, 200);
     }, 500);
 })();
+
+function checkCountdownCompletion(p) {
+  if (p.enableTimer && p.timerType === 'countdown' && p.countdown) {
+    const totalCountdownMs = (p.countdown.h * 3600 + p.countdown.m * 60 + p.countdown.s) * 1000;
+    if (p.timer && p.timerStatus === 'running') {
+      const elapsed = Date.now() - p.timer.startTime;
+      if (elapsed >= totalCountdownMs) {
+        console.log('倒计时完成，自动打卡:', p.name, 'ID:', p.id);
+        completeTimerPunch(p);
+        return true;
+      }
+    }
+  }
+  return false;
+}
