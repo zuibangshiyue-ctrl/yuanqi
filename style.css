@@ -27,7 +27,6 @@
   box-sizing: border-box;
 }
 
-/* 关键修复：禁止页面整体滚动，消除弹性回弹 */
 html, body {
   overflow: hidden;
   overscroll-behavior: none;
@@ -169,13 +168,11 @@ main {
   animation: fadeIn 0.5s ease;
 }
 
-/* 关键修复：所有独立滚动区，滚动边界不向外传递，并启用平滑触控滚动 */
-/* ！！！修改点：增加 overflow-x: hidden 禁止水平滚动 ！！！ */
 .tab-section {
   display: none;
   height: 100%;
   overflow-y: auto;
-  overflow-x: hidden;          /* 新增：禁止水平滚动 */
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
@@ -849,63 +846,6 @@ main {
   background: linear-gradient(135deg, #ff5a2f 0%, #ff7f50 100%);
 }
 
-#custom-frequency-container select {
-  width: 100% !important;
-  min-width: 0;
-  padding: 10px 12px;
-  font-size: 14px;
-  border-radius: var(--border-radius-md);
-  border: 2px solid #eee;
-  background: white;
-}
-
-#custom-frequency-container select:focus {
-  border-color: var(--primary-color);
-  outline: none;
-}
-
-#custom-monthday-container select,
-#custom-monthday-container input[type="text"] {
-  width: 100% !important;
-  min-width: 0;
-}
-
-#custom-specific-day {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-#custom-day-of-month {
-  min-width: 0;
-  width: 100%;
-}
-
-#custom-monthday-container > div {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-#custom-specific-day,
-#custom-weekday-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-#custom-weekday-option > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
 .day-punch-item-actions {
   display: flex;
   gap: 8px;
@@ -1218,29 +1158,6 @@ main {
   border-color: var(--primary-color);
 }
 
-#custom-frequency-container input[type="number"] {
-  padding: 10px 12px !important;
-  font-size: 14px;
-  border-radius: var(--border-radius-md);
-  border: 2px solid #eee;
-  background: white;
-}
-
-#custom-frequency-container input[type="number"]:focus {
-  border-color: var(--primary-color);
-  outline: none;
-}
-
-#custom-frequency-container .weekdays button {
-  padding: 10px 8px;
-  border-radius: var(--border-radius-md);
-  border: 2px solid #eee;
-}
-
-#custom-frequency-container .weekdays button.active {
-  border-color: var(--primary-color);
-}
-
 .icon-selector-container{
   display:flex;
   align-items:center;
@@ -1458,41 +1375,6 @@ main {
   border-color: var(--primary-color);
 }
 #new-plan-page #weekdays-container{display:none;}
-
-#custom-frequency-container {
-  background: rgba(255, 255, 255, 0.8);
-  padding: 16px;
-  border-radius: var(--border-radius-lg);
-  margin-bottom: 12px;
-  border: 1px solid rgba(255, 127, 80, 0.1);
-}
-
-#custom-frequency-container .weekdays {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 0;
-}
-
-#custom-frequency-container .weekdays button {
-  flex: 1;
-  min-width: 60px;
-  padding: 10px 8px;
-  border: 2px solid #eee;
-  border-radius: var(--border-radius-md);
-  background: #fff;
-  cursor: pointer;
-  font-size: 14px;
-  text-align: center;
-  transition: var(--transition);
-  font-weight: 500;
-}
-
-#custom-frequency-container .weekdays button.active {
-  background: var(--primary-color);
-  color: #fff;
-  border-color: var(--primary-color);
-}
 
 .settings-modal {
   display: none;
@@ -2096,22 +1978,6 @@ input:checked + .slider:before {
     height: 48px;
     font-size: 24px;
   }
-  #custom-frequency-container {
-    padding: 12px;
-  }
-  #custom-frequency-container select {
-    font-size: 14px;
-    padding: 8px;
-  }
-  #custom-frequency-container input[type="number"] {
-    font-size: 14px;
-    padding: 8px;
-  }
-  #custom-frequency-container .weekdays button {
-    min-width: 48px;
-    font-size: 13px;
-    padding: 8px 4px;
-  }
   .months-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -2357,9 +2223,8 @@ input:checked + .slider:before {
   transition: var(--transition);
 }
 
-/* 修改点：去掉向右移动效果，仅保留轻微上浮 */
 .legend-item.clickable:hover {
-  transform: translateY(-2px);  /* 原为 translateX(4px) */
+  transform: translateY(-2px);
   box-shadow: 0 6px 14px rgba(255, 127, 80, 0.12);
 }
 
@@ -2698,7 +2563,6 @@ body::before {
   transition: var(--transition);
 }
 .time-slot-item:hover {
-  /* 修改点：去掉向右平移效果，只保留轻微上浮和阴影 */
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(255, 127, 80, 0.12);
   background: #fffef7;
