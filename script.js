@@ -1,4 +1,7 @@
-// 元气打卡完整版 JS (修复计时器卡片每日多次打卡计数 + 支持每日0次=无限次数)
+// ================== 元气打卡 完整版 JS ==================
+// 包含：打卡计划管理、计时器、时间轴、日历、日记本、数据备份、日记单独导出/导入等
+
+// ---------- 全局变量 ----------
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
 let editMode = false;
 let editingIndex = null;
@@ -84,7 +87,6 @@ let timerTypeOptions = document.querySelectorAll('.timer-type-option');
 const punchHeaderButtons = document.getElementById('punch-header-buttons');
 const todayHeaderBtn = document.getElementById('today-header-btn');
 const journalAddBookBtn = document.getElementById('journal-add-book-btn');
-const journalSettingsBtn = document.getElementById('journal-settings-btn');
 
 const endPlanBtn = document.getElementById('end-plan-btn');
 const savePlanBtn = document.getElementById('save-plan-btn');
@@ -122,6 +124,7 @@ const CACHE_LIMIT = 100;
 
 const imageCache = new Map();
 
+// ---------- 辅助函数 ----------
 function isPlanActuallyEnded(p) {
     if (p.frequency !== 'once') return false;
     if (p.forceActive === true) return false;
@@ -453,9 +456,6 @@ async function processImportedData(backupData) {
     if (journalSection && journalSection.classList.contains('active')) {
       renderBookshelfUI();
     }
-  } else if (backupData.journalEntries) {
-    journalData = backupData.journalEntries;
-    localStorage.setItem('journalEntries', JSON.stringify(journalData));
   }
   
   return backupData;
@@ -501,6 +501,27 @@ function getFrequencyLabel(p) {
       
     case 'once':
       return '一次';
+    case 'custom':
+      if (p.customUnit) {
+        switch(p.customUnit) {
+          case 'days':
+            return `每${p.customInterval || 1}天`;
+          case 'weeks':
+            if (p.customWeekdays && p.customWeekdays.length > 0) {
+              const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+              const daysText = p.customWeekdays.map(day => weekdays[day]).join(',');
+              return `每${p.customInterval || 1}周${daysText}`;
+            }
+            return `每${p.customInterval || 1}周`;
+          case 'months':
+            return `每${p.customInterval || 1}月`;
+          case 'years':
+            return `每${p.customInterval || 1}年`;
+          default:
+            return '自定义';
+        }
+      }
+      return '自定义';
     default:
       return '';
   }
@@ -1433,8 +1454,114 @@ function isInCurrentPeriod(p) {
       const date = today.getDate();
       return month === 1 && date === 1;
       
+    case 'custom':
+      return isInCustomPeriod(p, today);
     default:
       return true;
+  }
+}
+
+function isInCustomPeriod(p, today) {
+  if (!p.customInterval || !p.customUnit) return true;
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayTimestamp = todayStart.getTime();
+  
+  let startDate;
+  if (p.lastCheckDate) {
+    startDate = new Date(p.lastCheckDate);
+  } else if (p.createdDate) {
+    startDate = new Date(p.createdDate);
+  } else {
+    const firstCheckDate = p.history && Object.keys(p.history)
+      .sort()
+      .find(dateStr => {
+        const record = p.history[dateStr];
+        if (p.dailyTimes && p.dailyTimes > 1) {
+          return record.punches >= record.maxPunches;
+        } else if (p.dailyTimes === 0) {
+          return false;
+        } else {
+          return record.checked === true;
+        }
+      });
+    
+    if (firstCheckDate) {
+      startDate = new Date(firstCheckDate + 'T00:00:00');
+    } else {
+      startDate = todayStart;
+    }
+  }
+  
+  startDate.setHours(0, 0, 0, 0);
+  const startTimestamp = startDate.getTime();
+  const daysDiff = Math.floor((todayTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
+  
+  switch(p.customUnit) {
+    case 'days':
+      return daysDiff % p.customInterval === 0;
+    case 'weeks':
+      if (!p.customWeekdays || p.customWeekdays.length === 0) {
+        return daysDiff % (p.customInterval * 7) === 0;
+      }
+      
+      if (!p.customWeekdays.includes(today.getDay())) {
+        return false;
+      }
+      
+      const weeksDiff = Math.floor(daysDiff / 7);
+      return weeksDiff % p.customInterval === 0;
+      
+    case 'months':
+      const monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12 + 
+                         (today.getMonth() - startDate.getMonth());
+      if (monthsDiff % p.customInterval !== 0) {
+        return false;
+      }
+      
+      if (p.customMonthDayType === 'day') {
+        return today.getDate() === p.customDayOfMonth;
+      } else {
+        return isNthWeekdayOfMonth(today, p.customWeekNumber, p.customWeekday);
+      }
+      
+    case 'years':
+      const yearsDiff = today.getFullYear() - startDate.getFullYear();
+      if (yearsDiff % p.customInterval !== 0) {
+        return false;
+      }
+      
+      return today.getMonth() + 1 === p.customMonthOfYear && 
+             today.getDate() === p.customDayOfYear;
+    default:
+      return true;
+  }
+}
+
+function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  
+  if (date.getDay() !== targetWeekday) {
+    return false;
+  }
+  
+  const targetDays = [];
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  
+  for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === targetWeekday) {
+      targetDays.push(new Date(d));
+    }
+  }
+  
+  if (weekNumber === -1) {
+    const lastTargetDay = targetDays[targetDays.length - 1];
+    return day === lastTargetDay.getDate();
+  } else {
+    const nthTargetDay = targetDays[weekNumber - 1];
+    return nthTargetDay && day === nthTargetDay.getDate();
   }
 }
 
@@ -1723,16 +1850,20 @@ function startDragAfterLongPress(element, clientX, clientY) {
   }, 400);
 }
 
+// ========== 辅助函数：判断今日是否有打卡记录（可撤销） ==========
 function canUndoToday(punch) {
   const today = getTodayDateString();
   const todayRecord = punch.history && punch.history[today];
   if (!todayRecord) return false;
+  // 无限次数：有打卡次数才可撤销
   if (punch.dailyTimes === 0) {
     return (todayRecord.punches || 0) > 0;
   }
+  // 多次数：有打卡次数才可撤销
   if (punch.dailyTimes && punch.dailyTimes > 1) {
     return (todayRecord.punches || 0) > 0;
   }
+  // 单次：已打卡才可撤销
   return todayRecord.checked === true;
 }
 
@@ -1839,6 +1970,7 @@ function updateCardTimerUI(cardLi, p) {
     }
 }
 
+// 撤销打卡函数（供右滑使用，增加判断条件）
 function undoTodayPunch(punch) {
   if (!punch) return;
   
@@ -1847,6 +1979,7 @@ function undoTodayPunch(punch) {
   
   let todayRecord = punch.history[today];
   if (!todayRecord) {
+    // 无记录则无法撤销，静默返回
     return;
   }
   
@@ -1854,6 +1987,7 @@ function undoTodayPunch(punch) {
   todayRecord.maxPunches = maxPunches;
   let currentPunches = todayRecord.punches || 0;
   
+  // 判断是否有打卡记录可以撤销
   if (punch.dailyTimes === 0) {
     if (currentPunches === 0) return;
   } else if (punch.dailyTimes && punch.dailyTimes > 1) {
@@ -1925,6 +2059,7 @@ function undoTodayPunch(punch) {
   }
 }
 
+// 滑动动画函数（保留右滑撤销/恢复，修改了点击行为）
 function bindSwipeAnimation(cardLi, punch) {
   let startX = 0, startY = 0;
   let isSwiping = false;
@@ -1950,6 +2085,7 @@ function bindSwipeAnimation(cardLi, punch) {
     });
   };
 
+  // 触摸事件
   const onTouchStart = (e) => {
     if (editMode) return;
     startX = e.touches[0].clientX;
@@ -1978,15 +2114,18 @@ function bindSwipeAnimation(cardLi, punch) {
     if (editMode) return;
     if (isSwiping) {
       const deltaX = e.changedTouches[0].clientX - startX;
+      // 左滑（<-） 仅当卡片有计时器时才打开番茄钟
       if (deltaX < -30) {
         if (punch.enableTimer) {
           openTomatoModal(punch);
         }
         resetTransform();
       }
+      // 右滑（->） -> 撤销打卡（先判断是否有打卡记录可撤销）
       else if (deltaX > 30) {
         e.preventDefault();
         e.stopPropagation();
+        // 判断是否为已结束的“once”计划（已打卡完成且未强制激活）
         const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
         if (isEndedOnce) {
           if (confirm("确定要恢复该计划吗？恢复后可以重新打卡。")) {
@@ -1994,11 +2133,13 @@ function bindSwipeAnimation(cardLi, punch) {
             saveAndRender();
           }
         } else {
+          // 只有存在可撤销记录时才弹确认框，否则静默返回
           if (canUndoToday(punch)) {
             if (confirm("确定要撤销打卡吗？")) {
               undoTodayPunch(punch);
             }
           }
+          // 无可撤销记录时不弹任何提示，直接返回
         }
         resetTransform();
       } else {
@@ -2014,6 +2155,7 @@ function bindSwipeAnimation(cardLi, punch) {
   cardLi.addEventListener('touchend', onTouchEnd);
   cardLi.addEventListener('touchcancel', resetTransform);
 
+  // 鼠标事件（支持PC端）
   let mouseStartX = 0, mouseStartY = 0;
   let mouseSwiping = false;
   let mouseDeltaX = 0;
@@ -2076,6 +2218,7 @@ function bindSwipeAnimation(cardLi, punch) {
   });
 }
 
+// ================== 核心修改：移除自动排序，保持原始顺序 ==================
 async function renderPunchList(forceRender = false) {
   const list = document.getElementById('punch-list');
   if (!list) return;
@@ -2103,6 +2246,7 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
+  // ========== 修改点：完全按照 punches 数组的原始顺序，只过滤掉不应显示的卡片 ==========
   const visibleCards = [];
   for (const p of punches) {
     if (shouldShowPunch(p)) {
@@ -2110,6 +2254,7 @@ async function renderPunchList(forceRender = false) {
     }
   }
   
+  // 直接按 visibleCards 的顺序渲染（该顺序等于 punches 中的原始顺序）
   for (const p of visibleCards) {
     const streakInfo = calculateStreak(p);
 
@@ -2248,21 +2393,25 @@ async function renderPunchList(forceRender = false) {
 
         const today = getTodayDateString();
 
+        // 已结束的一次性计划：点击无效，无弹窗
         if (p.frequency === 'once' && !isDoneToday && !p.timed && isPlanActuallyEnded(p)) {
           clickCount = 0;
           return;
         }
 
+        // 不在周期内：静默返回，无任何提示
         if (!isDoneToday && !isInCurrentPeriod(p)) {
           clickCount = 0;
           return;
         }
 
+        // 已打卡：不再弹出撤销确认，直接返回（无任何反应）
         if (isDoneToday) {
           clickCount = 0;
           return;
         }
         
+        // 未打卡的正常打卡逻辑
         if (p.enableTimer) {
           if (clickCount === 1) {
             if (!p.timer) {
@@ -2594,6 +2743,15 @@ function saveAndRender() {
           timed: p.timed || false,
           countdown: p.countdown || null,
           history: p.history || {},
+          customInterval: p.customInterval,
+          customUnit: p.customUnit,
+          customWeekdays: p.customWeekdays,
+          customMonthDayType: p.customMonthDayType,
+          customDayOfMonth: p.customDayOfMonth,
+          customWeekNumber: p.customWeekNumber,
+          customWeekday: p.customWeekday,
+          customMonthOfYear: p.customMonthOfYear,
+          customDayOfYear: p.customDayOfYear,
           forceActive: p.forceActive || false,
           timerStartTime: p.timerStartTime || null,
           pauseSegments: p.pauseSegments || [],
@@ -2632,6 +2790,13 @@ const uploadIconBtn = document.getElementById('upload-icon-btn');
 const iconUploadInput = document.getElementById('icon-upload-input');
 const recentIconsContainer = document.getElementById('recent-icons-container');
 let currentIcon = '📋';
+
+const customFrequencyContainer = document.getElementById('custom-frequency-container');
+const customUnit = document.getElementById('custom-unit');
+const customWeekdaysContainer = document.getElementById('custom-weekdays-container');
+const customMonthdayContainer = document.getElementById('custom-monthday-container');
+const customMonthdayType = document.getElementById('custom-monthday-type');
+const customWeekdaysBtns = customWeekdaysContainer ? customWeekdaysContainer.querySelectorAll('.weekdays button') : [];
 
 let countdownWheel = null;
 
@@ -2950,10 +3115,96 @@ if (planFrequency) {
     });
 
     if (weekdaysContainer) weekdaysContainer.style.display = value === 'weekly' ? 'block' : 'none';
+    if (customFrequencyContainer) customFrequencyContainer.style.display = value === 'custom' ? 'block' : 'none';
     if (dailyTimesContainer) dailyTimesContainer.style.display = value === 'daily' ? 'block' : 'none';
 
     selectedDays = [];
+    customWeekdays = [];
     weekdaysBtns.forEach(b => b.classList.remove('active'));
+    if (value === 'custom') {
+      const unit = customUnit.value;
+      updateCustomFrequencyUI(unit);
+    }
+  };
+}
+
+function updateCustomFrequencyUI(unit) {
+  const weekdaysContainer = document.getElementById('custom-weekdays-container');
+  const monthDayContainer = document.getElementById('custom-monthday-container');
+  const yearDayContainer = document.getElementById('custom-yearday-container');
+  const monthDayType = document.getElementById('custom-monthday-type');
+  const specificDay = document.getElementById('custom-specific-day');
+  const weekdayOption = document.getElementById('custom-weekday-option');
+
+  if (!weekdaysContainer || !monthDayContainer) return;
+
+  switch(unit) {
+    case 'days':
+      weekdaysContainer.style.display = 'none';
+      monthDayContainer.style.display = 'none';
+      if (yearDayContainer) yearDayContainer.style.display = 'none';
+      break;
+    case 'weeks':
+      weekdaysContainer.style.display = 'block';
+      monthDayContainer.style.display = 'none';
+      if (yearDayContainer) yearDayContainer.style.display = 'none';
+      break;
+    case 'months':
+      weekdaysContainer.style.display = 'none';
+      monthDayContainer.style.display = 'block';
+      if (yearDayContainer) yearDayContainer.style.display = 'none';
+      if (monthDayType) {
+        if (monthDayType.value === 'day') {
+          if (specificDay) specificDay.style.display = 'flex';
+          if (weekdayOption) weekdayOption.style.display = 'none';
+        } else {
+          if (specificDay) specificDay.style.display = 'none';
+          if (weekdayOption) weekdayOption.style.display = 'flex';
+        }
+      }
+      break;
+    case 'years':
+      weekdaysContainer.style.display = 'none';
+      monthDayContainer.style.display = 'none';
+      if (yearDayContainer) yearDayContainer.style.display = 'block';
+      break;
+  }
+}
+
+if (customUnit) {
+  customUnit.onchange = () => {
+    const unit = customUnit.value;
+    updateCustomFrequencyUI(unit);
+  };
+}
+
+if (customWeekdaysBtns.length > 0) {
+  customWeekdaysBtns.forEach(btn => {
+    btn.onclick = () => {
+      btn.classList.toggle('active');
+      const day = parseInt(btn.dataset.day);
+      if (btn.classList.contains('active')) {
+        customWeekdays.push(day);
+      } else {
+        customWeekdays = customWeekdays.filter(d => d !== day);
+      }
+    };
+  });
+}
+
+if (customMonthdayType) {
+  customMonthdayType.onchange = () => {
+    const type = customMonthdayType.value;
+    const specificDay = document.getElementById('custom-specific-day');
+    const weekdayOption = document.getElementById('custom-weekday-option');
+
+    if (type === 'day') {
+      if (specificDay) specificDay.style.display = 'flex';
+      if (weekdayOption) weekdayOption.style.display = 'none';
+    } else {
+      if (specificDay) specificDay.style.display = 'none';
+      if (weekdayOption) weekdayOption.style.display = 'flex';
+    }
   };
 }
 
@@ -2995,6 +3246,15 @@ if (savePlanBtn) {
       if (countdownWheel) {
         hours = countdownWheel.getHour();
         minutes = countdownWheel.getMinute();
+      } else {
+        const durationInput = document.getElementById('countdown-duration');
+        if (durationInput && durationInput.value) {
+          const parts = durationInput.value.split(':');
+          if (parts.length === 2) {
+            hours = parseInt(parts[0]) || 0;
+            minutes = parseInt(parts[1]) || 0;
+          }
+        }
       }
       countdownObj = {
         h: hours,
@@ -3046,6 +3306,25 @@ if (savePlanBtn) {
       timerType: plan.timerType,
       iconType: plan.icon.startsWith('db:') ? 'IndexedDB图片' : (plan.icon.startsWith('data:image') ? 'Base64图片' : 'emoji')
     });
+
+    if (planFrequency.value === 'custom') {
+      plan.customInterval = parseInt(document.getElementById('custom-interval').value) || 1;
+      plan.customUnit = document.getElementById('custom-unit').value;
+      if (plan.customUnit === 'weeks') {
+        plan.customWeekdays = [...customWeekdays];
+      } else if (plan.customUnit === 'months') {
+        plan.customMonthDayType = document.getElementById('custom-monthday-type').value;
+        if (plan.customMonthDayType === 'day') {
+          plan.customDayOfMonth = parseInt(document.getElementById('custom-day-of-month').value) || 1;
+        } else {
+          plan.customWeekNumber = parseInt(document.getElementById('custom-week-number').value) || 1;
+          plan.customWeekday = parseInt(document.getElementById('custom-weekday').value) || 1;
+        }
+      } else if (plan.customUnit === 'years') {
+        plan.customMonthOfYear = parseInt(document.getElementById('custom-month-of-year').value) || 1;
+        plan.customDayOfYear = parseInt(document.getElementById('custom-day-of-year').value) || 1;
+      }
+    }
 
     if (editingIndex !== null) {
       const existingHistory = punches[editingIndex].history || {};
@@ -3215,6 +3494,56 @@ async function showNewPlanPage(plan) {
       });
     }
 
+    if (plan.frequency === 'custom') {
+      if (plan.customInterval) {
+        document.getElementById('custom-interval').value = plan.customInterval;
+      }
+
+      if (plan.customUnit) {
+        const unitSelect = document.getElementById('custom-unit');
+        unitSelect.value = plan.customUnit;
+        updateCustomFrequencyUI(plan.customUnit);
+
+        if (plan.customUnit === 'weeks' && plan.customWeekdays) {
+          customWeekdays = [...plan.customWeekdays];
+          customWeekdaysBtns.forEach(btn => {
+            const day = parseInt(btn.dataset.day);
+            if (plan.customWeekdays.includes(day)) {
+              btn.classList.add('active');
+            }
+          });
+        }
+
+        if (plan.customUnit === 'months') {
+          if (plan.customMonthDayType) {
+            document.getElementById('custom-monthday-type').value = plan.customMonthDayType;
+            if (plan.customMonthDayType === 'day' && plan.customDayOfMonth) {
+              document.getElementById('custom-day-of-month').value = plan.customDayOfMonth;
+            } else if (plan.customMonthDayType === 'weekday') {
+              if (plan.customWeekNumber) {
+                document.getElementById('custom-week-number').value = plan.customWeekNumber;
+              }
+              if (plan.customWeekday) {
+                document.getElementById('custom-weekday').value = plan.customWeekday;
+              }
+            }
+
+            const event = new Event('change');
+            document.getElementById('custom-monthday-type').dispatchEvent(event);
+          }
+        }
+
+        if (plan.customUnit === 'years') {
+          if (plan.customMonthOfYear) {
+            document.getElementById('custom-month-of-year').value = plan.customMonthOfYear;
+          }
+          if (plan.customDayOfYear) {
+            document.getElementById('custom-day-of-year').value = plan.customDayOfYear;
+          }
+        }
+      }
+    }
+
     if (plan.dailyTimes !== undefined) {
       document.getElementById('daily-times').value = plan.dailyTimes;
     }
@@ -3281,6 +3610,14 @@ async function resetPlanPage() {
   weekdaysBtns.forEach(b => b.classList.remove('active'));
   document.getElementById('daily-times').value = '1';
   document.getElementById('reminder-time').value = '';
+  if (customFrequencyContainer) {
+    customFrequencyContainer.style.display = 'none';
+  }
+
+  customWeekdays = [];
+  if (customWeekdaysBtns.length > 0) {
+    customWeekdaysBtns.forEach(b => b.classList.remove('active'));
+  }
 
   if (editingIndex === null) {
     if (recentIcons.length > 0) {
@@ -5209,29 +5546,34 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
+// ================== 头部按钮控制（含日记设置按钮） ==================
 function updateHeaderButtons() {
   if (punchSection && punchSection.classList.contains('active')) {
     punchHeaderButtons.style.display = 'flex';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'none';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    const journalSettingsBtn = document.getElementById('journal-settings-btn');
     if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (timeSection && timeSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'flex';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    const journalSettingsBtn = document.getElementById('journal-settings-btn');
     if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (calendarSection && calendarSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'flex';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'none';
+    const journalSettingsBtn = document.getElementById('journal-settings-btn');
     if (journalSettingsBtn) journalSettingsBtn.style.display = 'none';
     document.getElementById('header').classList.remove('journal-header');
   } else if (journalSection && journalSection.classList.contains('active')) {
     if (punchHeaderButtons) punchHeaderButtons.style.display = 'none';
     if (todayHeaderBtn) todayHeaderBtn.style.display = 'none';
     if (journalAddBookBtn) journalAddBookBtn.style.display = 'flex';
+    const journalSettingsBtn = document.getElementById('journal-settings-btn');
     if (journalSettingsBtn) journalSettingsBtn.style.display = 'flex';
     document.getElementById('header').classList.add('journal-header');
   }
@@ -6303,6 +6645,8 @@ function initJournalModule() {
             createNewBook();
         };
     }
+    // 初始化日记设置模态框（无底部按钮，增加清空功能）
+    initJournalSettingsModal();
 }
 function refreshJournalOnShow() {
     if (journalSection && journalSection.classList.contains('active')) {
@@ -6377,27 +6721,22 @@ if (navCalendar) {
     };
 }
 
-// ================== 日记单独导入导出功能 ==================
+// ================== 日记单独导出/导入 + 清空日记数据 ==================
 const journalSettingsModal = document.getElementById('journal-settings-modal');
-const closeJournalSettingsBtns = document.querySelectorAll('#close-journal-settings, #close-journal-settings-footer');
-const exportJournalBtn = document.getElementById('export-journal-btn');
-const importJournalBtn = document.getElementById('import-journal-btn');
-const importJournalInput = document.getElementById('import-journal-input');
-const clearAllJournalBtn = document.getElementById('clear-all-journal-btn');
+const closeJournalSettingsBtn = document.getElementById('close-journal-settings');
+const exportJournalBtn = document.getElementById('export-journal-data');
+const importJournalBtn = document.getElementById('import-journal-data');
+const clearJournalDataBtn = document.getElementById('clear-journal-data-btn');
+let journalImportFileInput = null;
 
 function exportJournalData() {
     try {
-        const exportObj = {
-            version: '2.1',
-            exportDate: new Date().toISOString(),
-            books: books
-        };
-        const dataStr = JSON.stringify(exportObj, null, 2);
+        const dataStr = JSON.stringify(books, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `元气打卡_日记备份_${new Date().toISOString().slice(0,10)}.json`;
+        a.download = `元气打卡_日记备份_${new Date().toISOString().slice(0, 10)}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -6409,83 +6748,113 @@ function exportJournalData() {
     }
 }
 
-async function importJournalData(file) {
+function importJournalData(event) {
+    const file = event.target.files[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
-            let content = e.target.result;
-            if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
-            const imported = JSON.parse(content);
-            if (!imported.books || !Array.isArray(imported.books)) throw new Error('无效的日记备份文件：缺少books数组');
-            if (confirm('导入日记将替换当前所有日记本数据，是否继续？')) {
-                const newBooks = imported.books;
-                books = newBooks;
+            let fileContent = e.target.result;
+            if (fileContent.charCodeAt(0) === 0xFEFF) {
+                fileContent = fileContent.slice(1);
+            }
+            const importedBooks = JSON.parse(fileContent);
+            
+            if (!Array.isArray(importedBooks)) {
+                throw new Error('无效的日记备份文件：根数据不是数组');
+            }
+            for (let book of importedBooks) {
+                if (!book.id || !book.name || !Array.isArray(book.pages)) {
+                    throw new Error('日记数据结构不完整，导入失败');
+                }
+            }
+            
+            if (confirm(`导入日记将覆盖当前所有日记本（共 ${books.length} 本），是否继续？`)) {
+                if (notebookView && notebookView.style.display === 'block') {
+                    closeNotebookDiary();
+                }
+                books = importedBooks;
                 saveBooksToLocal();
+                renderBookshelfUI();
                 if (journalSection && journalSection.classList.contains('active')) {
-                    if (notebookView.style.display === 'block') closeNotebookDiary();
+                    if (bookshelfView) bookshelfView.style.display = 'block';
+                    if (notebookView) notebookView.style.display = 'none';
                     renderBookshelfUI();
                 }
-                showToast(`日记导入成功！共 ${books.length} 个日记本`);
-                journalSettingsModal.style.display = 'none';
+                showToast(`日记导入成功，共 ${books.length} 本日记本`);
             }
         } catch (err) {
             console.error(err);
             showToast('导入失败：' + err.message);
         }
+        event.target.value = '';
     };
     reader.onerror = () => showToast('读取文件失败');
     reader.readAsText(file, 'UTF-8');
 }
 
-function clearAllJournals() {
-    if (!confirm('⚠️ 此操作将删除所有日记本及全部日记内容，只保留一本全新空白日记。此操作不可恢复，确定要继续吗？')) return;
-    const defaultBook = {
-        id: Date.now(),
-        name: "我的日记",
-        coverColor: "#faf2e4",
-        pages: [{ id: Date.now()+1, title: "扉页", content: "新的一页，新的开始。", updatedAt: new Date().toISOString() }],
-        currentPageIndex: 0,
-        createdAt: new Date().toISOString()
-    };
-    books = [defaultBook];
-    saveBooksToLocal();
-    if (journalSection && journalSection.classList.contains('active')) {
-        if (notebookView.style.display === 'block') closeNotebookDiary();
+function clearAllJournalData() {
+    if (confirm('⚠️ 警告：此操作将永久删除所有日记本及日记内容，不可恢复！确定要继续吗？')) {
+        if (notebookView && notebookView.style.display === 'block') {
+            closeNotebookDiary();
+        }
+        books = [];
+        localStorage.removeItem('paper_multi_books');
+        initDataDiary();  // 重新创建默认日记本
         renderBookshelfUI();
+        if (journalSection && journalSection.classList.contains('active')) {
+            if (bookshelfView) bookshelfView.style.display = 'block';
+            if (notebookView) notebookView.style.display = 'none';
+            renderBookshelfUI();
+        }
+        showToast('日记数据已清空，已重新创建默认日记本');
     }
-    showToast('所有日记已清空，已创建全新默认日记本');
-    journalSettingsModal.style.display = 'none';
 }
 
-if (journalSettingsBtn) {
-    journalSettingsBtn.onclick = () => {
+function initJournalSettingsModal() {
+    if (!journalSettingsModal) return;
+    
+    if (closeJournalSettingsBtn) {
+        closeJournalSettingsBtn.onclick = () => {
+            journalSettingsModal.style.display = 'none';
+        };
+    }
+    
+    journalSettingsModal.onclick = (e) => {
+        if (e.target === journalSettingsModal) {
+            journalSettingsModal.style.display = 'none';
+        }
+    };
+    
+    if (exportJournalBtn) {
+        exportJournalBtn.onclick = exportJournalData;
+    }
+    
+    if (importJournalBtn) {
+        importJournalBtn.onclick = () => {
+            if (!journalImportFileInput) {
+                journalImportFileInput = document.createElement('input');
+                journalImportFileInput.type = 'file';
+                journalImportFileInput.accept = '.json';
+                journalImportFileInput.addEventListener('change', importJournalData);
+            }
+            journalImportFileInput.click();
+        };
+    }
+    
+    if (clearJournalDataBtn) {
+        clearJournalDataBtn.onclick = clearAllJournalData;
+    }
+}
+
+// 绑定日记设置按钮点击事件
+const journalSettingsHeaderBtn = document.getElementById('journal-settings-btn');
+if (journalSettingsHeaderBtn) {
+    journalSettingsHeaderBtn.onclick = () => {
         if (journalSettingsModal) journalSettingsModal.style.display = 'flex';
     };
 }
-if (closeJournalSettingsBtns) {
-    closeJournalSettingsBtns.forEach(btn => {
-        btn.onclick = () => { if (journalSettingsModal) journalSettingsModal.style.display = 'none'; };
-    });
-}
-if (journalSettingsModal) {
-    journalSettingsModal.onclick = (e) => {
-        if (e.target === journalSettingsModal) journalSettingsModal.style.display = 'none';
-    };
-}
-if (exportJournalBtn) exportJournalBtn.onclick = exportJournalData;
-if (importJournalBtn) {
-    importJournalBtn.onclick = () => { if (importJournalInput) importJournalInput.click(); };
-}
-if (importJournalInput) {
-    importJournalInput.onchange = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            importJournalData(e.target.files[0]);
-            e.target.value = '';
-        }
-    };
-}
-if (clearAllJournalBtn) clearAllJournalBtn.onclick = clearAllJournals;
 
 // ================== 应用初始化 ==================
 async function initApp() {
@@ -6585,7 +6954,7 @@ async function initApp() {
     initYearMonthPicker();
     initCountdownInputs();
     initDatePicker();
-    initJournalModule();
+    initJournalModule();  // 内部已调用 initJournalSettingsModal
   }, 200);
 
   if (timeDatePicker) {
