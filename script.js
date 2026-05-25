@@ -1,5 +1,6 @@
 // ================== 元气打卡 完整版 JS ==================
-// 包含：打卡计划管理、计时器、时间轴、日历、日记本、数据备份、日记单独导出/导入等
+// 包含：打卡计划管理、计时器、时间轴、日历、日记本（垂直滚动翻页）、数据备份、日记单独导出/导入等
+// 新增：日记页面左侧边缘右滑返回书架视图功能
 
 // ---------- 全局变量 ----------
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
@@ -114,7 +115,7 @@ let recentIconLongPressTimer = null;
 const clearAllDataBtn = document.getElementById('clear-all-data-btn');
 
 const retroactiveSVG = `<svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="200" height="200"><path d="M510.964926 81.298608c-239.21522 0-433.834756 194.641025-433.834756 433.831686 0 239.240803 194.619536 433.855222 433.834756 433.855222 239.213173 0 433.855222-194.615443 433.855222-433.855222C944.820148 275.939633 750.178099 81.298608 510.964926 81.298608zM510.964926 893.165186c-208.445426 0-378.01238-169.570024-378.01238-378.035916 0-208.416773 169.566954-378.011356 378.01238-378.011356 208.442356 0 378.034892 169.594583 378.034892 378.011356C888.999818 723.595162 735.407282 893.165186 510.964926 893.165186z" fill="#ff7f50"></path><path d="M389.732817 354.579691c4.137227 7.976672 12.313443 12.58769 20.762883 12.58769 3.617387 0 7.28287-0.844228 10.701736-2.626827 11.449773-5.921873 15.932878-20.019962 9.985422-31.466666l-26.879184-51.782364c-5.947456-11.470239-20.094664-15.880689-31.468712-10.008958-11.44568 5.972015-15.927761 20.018939-9.958816 31.515784L389.732817 354.579691z" fill="#ff7f50"></path><path d="M521.24506 494.341828c-10.256598-7.803733-24.877597-5.898337-32.751938 4.312212l-38.132482 49.673329c-6.566556-4.062526-12.090363-7.380084-16.551978-9.933233l0-31.984459c0-1.438769-0.568958-2.677992-0.840134-4.064572 41.59842-49.725518 55.969733-84.535325 56.886615-86.915535 4.706185-11.941983-1.116427-25.421996-13.057387-30.176276-3.269463-1.339508-6.639211-1.710968-9.911744-1.538029-0.418532 0-0.766456-0.198521-1.139963-0.198521L314.436924 383.516744c-12.883425 0-23.363104 10.457166-23.363104 23.340591 0 12.93152 10.479679 23.338544 23.363104 23.338544l114.021893 0c-21.457708 33.027208-64.742537 87.832418-143.776567 146.528238-10.354835 7.728008-12.487406 22.347984-4.780887 32.654724 4.558829 6.217608 11.618619 9.442046 18.755156 9.442046 4.856611 0 9.735735-1.486864 13.925151-4.612041 29.211299-21.680788 53.713342-42.887786 74.526367-62.956867l0 187.012278c0 12.883425 10.457166 23.341614 23.339568 23.341614 12.883425 0 23.362081-10.458189 23.362081-23.341614L433.809685 593.173764c19.574824 12.68695 42.046628 29.163203 55.449893 44.797275 4.63353 5.373381 11.17348 8.124028 17.740036 8.124028 5.377474 0 10.777461-1.809205 15.188934-5.573949 9.784854-8.401344 10.924817-23.11751 2.551102-32.951483-9.838066-11.472286-22.74298-22.595624-35.849486-32.680307l36.642548-47.76998C533.362029 516.863774 531.479145 502.195703 521.24506 494.341828z" fill="#ff7f50"></path><path d="M588.11812 268.680299c-12.883425 0-23.340591 10.480702-23.340591 23.364127l0 446.219831c0 12.883425 10.457166 23.341614 23.340591 23.341614s23.312962-10.458189 23.312962-23.341614L611.431082 292.043403c0-12.883425-10.47056-23.363104-23.312962-23.363104z" fill="#ff7f50"></path><path d="M660.288836 438.867376c-9.116635-9.141194-23.882943-9.116635-33.000602-0.024559-9.144264 9.144264-9.144264 23.909549 0 33.027208l79.530334 79.533404c4.556783 4.558829 10.483772 6.837732 16.501836 6.837732 5.969968 0 11.94403-2.278903 16.502859-6.837732 9.117658-9.121751 9.117658-23.887037 0-33.003672L660.288836 438.867376z" fill="#ff7f50"></path></svg>`;
-const undoSVG = `<svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="981" width="200" height="200"><path d="M512.002558 65.340147c-246.729357 0-446.662923 199.932542-446.662923 446.662923 0 246.724241 199.932542 446.656783 446.662923 446.656783 246.724241 0 446.656783-199.932542 446.656783-446.656783C958.659341 265.272689 758.726799 65.340147 512.002558 65.340147L512.002558 65.340147zM512.002558 916.122037c-223.331461 0-404.125107-180.793646-404.125107-404.119991 0-223.331461 180.793646-404.125107 404.125107-404.125107 221.200938 0 404.119991 180.793646 404.119991 404.125107C916.121526 735.328391 735.32788 916.122037 512.002558 916.122037z" fill="#ff7f50" p-id="982"></path><path d="M703.428356 358.858134" fill="#ff7f50" p-id="983"></path><path d="M489.236042 283.931654 288.234145 488.331951 489.236042 690.592514 489.236042 562.250474c0 0 233.490845-119.05656 213.377762 177.816848 0 0 157.733441-282.95542-214.916814-338.63965L489.236042 283.931654 489.236042 283.931654zM489.236042 283.931654" fill="#ff7f50" p-id="984"></path></svg>`;
+const undoSVG = `<svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="981" width="200" height="200"><path d="M512.002558 65.340147c-246.729357 0-446.662923 199.932542-446.662923 446.662923 0 246.724241 199.932542 446.656783 446.662923 446.656783 246.724241 0 446.656783-199.932542 446.656783-446.656783C958.659341 265.272689 726.726799 65.340147 512.002558 65.340147zM512.002558 916.122037c-223.331461 0-404.125107-180.793646-404.125107-404.119991 0-223.331461 180.793646-404.125107 404.125107-404.125107 221.200938 0 404.119991 180.793646 404.119991 404.125107C916.121526 735.328391 735.32788 916.122037 512.002558 916.122037z" fill="#ff7f50" p-id="982"></path><path d="M703.428356 358.858134" fill="#ff7f50" p-id="983"></path><path d="M489.236042 283.931654 288.234145 488.331951 489.236042 690.592514 489.236042 562.250474c0 0 233.490845-119.05656 213.377762 177.816848 0 0 157.733441-282.95542-214.916814-338.63965L489.236042 283.931654 489.236042 283.931654zM489.236042 283.931654" fill="#ff7f50" p-id="984"></path></svg>`;
 
 let imageDB = null;
 const IMAGE_DB_NAME = 'PunchImageDB';
@@ -124,8 +125,23 @@ const CACHE_LIMIT = 100;
 
 const imageCache = new Map();
 
+// 初始化 isEnded 字段
+function initIsEndedField() {
+  punches.forEach(p => {
+    if (p.isEnded === undefined) {
+      if (p.frequency === 'once' && hasAnyCompletedCheckForOnce(p)) {
+        p.isEnded = true;
+      } else {
+        p.isEnded = false;
+      }
+    }
+  });
+  saveToLocalStorage();
+}
+
 // ---------- 辅助函数 ----------
 function isPlanActuallyEnded(p) {
+    if (p.isEnded === true) return true;
     if (p.frequency !== 'once') return false;
     if (p.forceActive === true) return false;
     return hasAnyCompletedCheckForOnce(p);
@@ -630,6 +646,8 @@ async function importBackupData(event) {
         hideInactivePlans = processedData.hideInactivePlans || false;
         timerSessions = processedData.timerSessions || [];
         cardColorMap = processedData.cardColorMap || {};
+        
+        punches.forEach(p => { if (p.isEnded === undefined) p.isEnded = false; });
         
         saveToLocalStorage();
         renderPunchList();
@@ -1420,6 +1438,8 @@ function saveToLocalStorage() {
 }
 
 function isInCurrentPeriod(p) {
+  if (p.isEnded === true) return false;
+  
   const today = new Date();
   const dayOfWeek = today.getDay();
   const dayOfMonth = today.getDate();
@@ -1566,6 +1586,8 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
 }
 
 function shouldShowPunch(p) {
+  if (p.isEnded === true) return true;
+  
   if (!hideInactivePlans) {
     return true;
   }
@@ -1850,24 +1872,24 @@ function startDragAfterLongPress(element, clientX, clientY) {
   }, 400);
 }
 
-// ========== 辅助函数：判断今日是否有打卡记录（可撤销） ==========
 function canUndoToday(punch) {
   const today = getTodayDateString();
   const todayRecord = punch.history && punch.history[today];
   if (!todayRecord) return false;
-  // 无限次数：有打卡次数才可撤销
   if (punch.dailyTimes === 0) {
     return (todayRecord.punches || 0) > 0;
   }
-  // 多次数：有打卡次数才可撤销
   if (punch.dailyTimes && punch.dailyTimes > 1) {
     return (todayRecord.punches || 0) > 0;
   }
-  // 单次：已打卡才可撤销
   return todayRecord.checked === true;
 }
 
 function getTimerBottomHTML(p) {
+    if (p.isEnded === true) {
+        return `<div class="streak">计划已结束</div>`;
+    }
+    
     const today = getTodayDateString();
     const todayRecord = p.history[today] || {};
     const todayPunches = todayRecord.punches || 0;
@@ -1970,7 +1992,6 @@ function updateCardTimerUI(cardLi, p) {
     }
 }
 
-// 撤销打卡函数（供右滑使用，增加判断条件）
 function undoTodayPunch(punch) {
   if (!punch) return;
   
@@ -1979,7 +2000,6 @@ function undoTodayPunch(punch) {
   
   let todayRecord = punch.history[today];
   if (!todayRecord) {
-    // 无记录则无法撤销，静默返回
     return;
   }
   
@@ -1987,7 +2007,6 @@ function undoTodayPunch(punch) {
   todayRecord.maxPunches = maxPunches;
   let currentPunches = todayRecord.punches || 0;
   
-  // 判断是否有打卡记录可以撤销
   if (punch.dailyTimes === 0) {
     if (currentPunches === 0) return;
   } else if (punch.dailyTimes && punch.dailyTimes > 1) {
@@ -2059,7 +2078,6 @@ function undoTodayPunch(punch) {
   }
 }
 
-// 滑动动画函数（保留右滑撤销/恢复，修改了点击行为）
 function bindSwipeAnimation(cardLi, punch) {
   let startX = 0, startY = 0;
   let isSwiping = false;
@@ -2085,7 +2103,6 @@ function bindSwipeAnimation(cardLi, punch) {
     });
   };
 
-  // 触摸事件
   const onTouchStart = (e) => {
     if (editMode) return;
     startX = e.touches[0].clientX;
@@ -2114,32 +2131,35 @@ function bindSwipeAnimation(cardLi, punch) {
     if (editMode) return;
     if (isSwiping) {
       const deltaX = e.changedTouches[0].clientX - startX;
-      // 左滑（<-） 仅当卡片有计时器时才打开番茄钟
       if (deltaX < -30) {
         if (punch.enableTimer) {
           openTomatoModal(punch);
         }
         resetTransform();
       }
-      // 右滑（->） -> 撤销打卡（先判断是否有打卡记录可撤销）
       else if (deltaX > 30) {
         e.preventDefault();
         e.stopPropagation();
-        // 判断是否为已结束的“once”计划（已打卡完成且未强制激活）
-        const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
-        if (isEndedOnce) {
-          if (confirm("确定要恢复该计划吗？恢复后可以重新打卡。")) {
-            punch.forceActive = true;
+        if (punch.isEnded === true) {
+          if (confirm("确定要恢复该计划吗？")) {
+            punch.isEnded = false;
             saveAndRender();
           }
         } else {
-          // 只有存在可撤销记录时才弹确认框，否则静默返回
-          if (canUndoToday(punch)) {
-            if (confirm("确定要撤销打卡吗？")) {
-              undoTodayPunch(punch);
+          const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
+          if (isEndedOnce) {
+            if (confirm("确定要恢复该计划吗？")) {
+              punch.forceActive = true;
+              punch.isEnded = false;
+              saveAndRender();
+            }
+          } else {
+            if (canUndoToday(punch)) {
+              if (confirm("确定要撤销打卡吗？")) {
+                undoTodayPunch(punch);
+              }
             }
           }
-          // 无可撤销记录时不弹任何提示，直接返回
         }
         resetTransform();
       } else {
@@ -2155,7 +2175,6 @@ function bindSwipeAnimation(cardLi, punch) {
   cardLi.addEventListener('touchend', onTouchEnd);
   cardLi.addEventListener('touchcancel', resetTransform);
 
-  // 鼠标事件（支持PC端）
   let mouseStartX = 0, mouseStartY = 0;
   let mouseSwiping = false;
   let mouseDeltaX = 0;
@@ -2189,16 +2208,24 @@ function bindSwipeAnimation(cardLi, punch) {
           }
           resetTransform();
         } else if (deltaX > 30) {
-          const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
-          if (isEndedOnce) {
-            if (confirm("确定要恢复该计划吗？恢复后可以重新打卡。")) {
-              punch.forceActive = true;
+          if (punch.isEnded === true) {
+            if (confirm("确定要恢复该计划吗？")) {
+              punch.isEnded = false;
               saveAndRender();
             }
           } else {
-            if (canUndoToday(punch)) {
-              if (confirm("确定要撤销打卡吗？")) {
-                undoTodayPunch(punch);
+            const isEndedOnce = (punch.frequency === 'once' && isPlanActuallyEnded(punch));
+            if (isEndedOnce) {
+              if (confirm("确定要恢复该计划吗？")) {
+                punch.forceActive = true;
+                punch.isEnded = false;
+                saveAndRender();
+              }
+            } else {
+              if (canUndoToday(punch)) {
+                if (confirm("确定要撤销打卡吗？")) {
+                  undoTodayPunch(punch);
+                }
               }
             }
           }
@@ -2218,7 +2245,6 @@ function bindSwipeAnimation(cardLi, punch) {
   });
 }
 
-// ================== 核心修改：移除自动排序，保持原始顺序 ==================
 async function renderPunchList(forceRender = false) {
   const list = document.getElementById('punch-list');
   if (!list) return;
@@ -2246,7 +2272,6 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
-  // ========== 修改点：完全按照 punches 数组的原始顺序，只过滤掉不应显示的卡片 ==========
   const visibleCards = [];
   for (const p of punches) {
     if (shouldShowPunch(p)) {
@@ -2254,7 +2279,6 @@ async function renderPunchList(forceRender = false) {
     }
   }
   
-  // 直接按 visibleCards 的顺序渲染（该顺序等于 punches 中的原始顺序）
   for (const p of visibleCards) {
     const streakInfo = calculateStreak(p);
 
@@ -2393,25 +2417,26 @@ async function renderPunchList(forceRender = false) {
 
         const today = getTodayDateString();
 
-        // 已结束的一次性计划：点击无效，无弹窗
+        if (p.isEnded === true) {
+          clickCount = 0;
+          return;
+        }
+
         if (p.frequency === 'once' && !isDoneToday && !p.timed && isPlanActuallyEnded(p)) {
           clickCount = 0;
           return;
         }
 
-        // 不在周期内：静默返回，无任何提示
         if (!isDoneToday && !isInCurrentPeriod(p)) {
           clickCount = 0;
           return;
         }
 
-        // 已打卡：不再弹出撤销确认，直接返回（无任何反应）
         if (isDoneToday) {
           clickCount = 0;
           return;
         }
         
-        // 未打卡的正常打卡逻辑
         if (p.enableTimer) {
           if (clickCount === 1) {
             if (!p.timer) {
@@ -2753,6 +2778,7 @@ function saveAndRender() {
           customMonthOfYear: p.customMonthOfYear,
           customDayOfYear: p.customDayOfYear,
           forceActive: p.forceActive || false,
+          isEnded: p.isEnded || false,
           timerStartTime: p.timerStartTime || null,
           pauseSegments: p.pauseSegments || [],
           pauseStartTime: p.pauseStartTime || null
@@ -3221,6 +3247,49 @@ function isPlanNameDuplicate(name, currentEditingId = null) {
   return false;
 }
 
+if (endPlanBtn) {
+  endPlanBtn.onclick = async () => {
+    if (editingIndex === null) {
+      alert('请先创建计划再结束');
+      return;
+    }
+    
+    const plan = punches[editingIndex];
+    if (!plan) {
+      alert('未找到该计划');
+      return;
+    }
+    
+    if (plan.isEnded === true) {
+      alert('该计划已经结束');
+      return;
+    }
+    
+    if (!confirm('确定要结束这个计划吗？结束后将无法再打卡，但历史记录会保留。')) {
+      return;
+    }
+    
+    plan.isEnded = true;
+    
+    if (plan.timerInterval) {
+      clearInterval(plan.timerInterval);
+      plan.timerInterval = null;
+    }
+    plan.timer = null;
+    plan.timerStatus = 'init';
+    plan.timed = false;
+    plan.paused = false;
+    plan.timerStartTime = null;
+    plan.pauseSegments = [];
+    plan.pauseStartTime = null;
+    
+    saveAndRender();
+    newPlanPage.style.display = 'none';
+    
+    showToast('计划已结束');
+  };
+}
+
 if (savePlanBtn) {
   savePlanBtn.onclick = async () => {
     console.log('点击保存按钮');
@@ -3293,6 +3362,7 @@ if (savePlanBtn) {
         }
       },
       forceActive: false,
+      isEnded: false,
       timerStartTime: null,
       pauseSegments: [],
       pauseStartTime: null
@@ -3332,6 +3402,7 @@ if (savePlanBtn) {
       const existingTimerStatus = punches[editingIndex].timerStatus;
       const existingTimed = punches[editingIndex].timed;
       const existingId = punches[editingIndex].id;
+      const existingIsEnded = punches[editingIndex].isEnded || false;
       const mergedHistory = { ...existingHistory, ...plan.history };
 
       if (existingHistory[today]) {
@@ -3347,6 +3418,7 @@ if (savePlanBtn) {
       plan.timed = existingTimed || plan.timed;
       plan.id = existingId;
       plan.forceActive = punches[editingIndex].forceActive || false;
+      plan.isEnded = existingIsEnded;
       
       plan.timerStartTime = punches[editingIndex].timerStartTime || null;
       plan.pauseSegments = punches[editingIndex].pauseSegments || [];
@@ -3378,87 +3450,6 @@ if (savePlanBtn) {
     if (navJournal) navJournal.classList.remove('active');
 
     console.log('保存完成，返回打卡页面');
-  };
-}
-
-if (endPlanBtn) {
-  endPlanBtn.onclick = async () => {
-    const name = document.getElementById('plan-name').value.trim();
-    if (!name) {
-      alert('请输入卡片名称');
-      return;
-    }
-
-    const currentId = (editingIndex !== null && punches[editingIndex]) ? punches[editingIndex].id : null;
-
-    if (!confirm('确定要结束这个计划吗？结束后将无法再打卡，但历史记录会保留。')) {
-      return;
-    }
-
-    const today = getTodayDateString();
-
-    const processedIcon = await processImageData(currentIcon);
-
-    const plan = {
-      name,
-      icon: processedIcon,
-      desc: document.getElementById('plan-desc').value,
-      frequency: 'once',
-      dailyTimes: 1,
-      days: [],
-      enableTimer: false,
-      reminderTime: '',
-      timerType: 'countup',
-      timer: null,
-      timerStatus: 'init',
-      timerInterval: null,
-      paused: false,
-      timed: false,
-      countdown: null,
-      history: {
-        [today]: {
-          checked: true,
-          checkedTime: getCurrentTimeString(),
-          lastUpdate: getCurrentTimeString(),
-          punches: 1,
-          maxPunches: 1
-        }
-      },
-      isEnded: true,
-      forceActive: false,
-      timerStartTime: null,
-      pauseSegments: [],
-      pauseStartTime: null
-    };
-
-    if (editingIndex !== null) {
-      const existingHistory = punches[editingIndex].history || {};
-      const existingId = punches[editingIndex].id;
-      plan.history = { ...existingHistory, ...plan.history };
-      plan.id = existingId;
-      punches[editingIndex] = { ...punches[editingIndex], ...plan };
-    } else {
-      plan.id = 'punch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      punches.unshift(plan);
-    }
-
-    if (processedIcon) {
-      await addToRecentIcons(processedIcon);
-    }
-
-    saveAndRender();
-    newPlanPage.style.display = 'none';
-
-    punchSection.classList.add('active');
-    timeSection.classList.remove('active');
-    calendarSection.classList.remove('active');
-    journalSection.classList.remove('active');
-    navPunch.classList.add('active');
-    navTime.classList.remove('active');
-    navCalendar.classList.remove('active');
-    if (navJournal) navJournal.classList.remove('active');
-
-    showToast('计划已结束');
   };
 }
 
@@ -5546,7 +5537,6 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
-// ================== 头部按钮控制（含日记设置按钮） ==================
 function updateHeaderButtons() {
   if (punchSection && punchSection.classList.contains('active')) {
     punchHeaderButtons.style.display = 'flex';
@@ -5898,7 +5888,7 @@ if (tomatoModal) {
   };
 }
 
-// ================== 日记模块 ==================
+// ================== 日记模块 - 全新垂直滚动实现 ==================
 let books = [];
 let activeBookId = null;
 let activeBook = null;
@@ -5956,518 +5946,343 @@ function syncActiveBookToBooks() {
         saveBooksToLocal();
     }
 }
-function renderActiveBookUI() {
-    if (!activeBook || activeBook.pages.length === 0) return;
-    const page = activeBook.pages[activeBook.currentPageIndex];
-    if (!page) return;
-    diaryTitle.value = page.title;
-    diaryContent.value = page.content;
-    pageNumDisplay.innerText = `第 ${activeBook.currentPageIndex + 1} 页`;
-    pageCounterSpan.innerText = `${activeBook.currentPageIndex + 1} / ${activeBook.pages.length}`;
-    quickPageSlider.min = 1;
-    quickPageSlider.max = activeBook.pages.length;
-    quickPageSlider.value = activeBook.currentPageIndex + 1;
-    quickPageValue.innerText = `${activeBook.currentPageIndex + 1} / ${activeBook.pages.length}`;
-}
-function syncCurrentPageFromUI() {
-    if (!activeBook || !activeBook.pages[activeBook.currentPageIndex]) return;
-    const newTitle = diaryTitle.value.trim() === "" ? "无题日记" : diaryTitle.value;
-    const newContent = diaryContent.value;
-    const currPage = activeBook.pages[activeBook.currentPageIndex];
-    if (currPage.title !== newTitle || currPage.content !== newContent) {
-        currPage.title = newTitle;
-        currPage.content = newContent;
-        currPage.updatedAt = new Date().toISOString();
-        syncActiveBookToBooks();
+
+// 新渲染垂直滚动视图（替代原有翻页卡片）
+let currentVerticalScrollContainer = null;
+let savedBookshelfScrollTop = 0;   // 新增：存储书架视图滚动位置
+
+function renderVerticalPages() {
+    if (!activeBook || !notebookView) return;
+    
+    const oldScroll = notebookView.querySelector('.diary-vertical-scroll');
+    if (oldScroll) oldScroll.remove();
+    
+    const scrollContainer = document.createElement('div');
+    scrollContainer.className = 'diary-vertical-scroll';
+    scrollContainer.style.cssText = 'flex:1; overflow-y: auto; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch;';
+    
+    for (let i = 0; i < activeBook.pages.length; i++) {
+        const page = activeBook.pages[i];
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'diary-page-item';
+        pageDiv.setAttribute('data-page-index', i);
+        pageDiv.style.cssText = 'scroll-snap-align: start; min-height: 100%; background: #fffef7; padding: 1rem 1.2rem 1.2rem; border-bottom: 1px solid rgba(0,0,0,0.05); box-sizing: border-box;';
+        
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'diary-page-header';
+        headerDiv.innerHTML = `<span class="diary-page-date">${formatShortDate(page.updatedAt || new Date())}</span><span style="font-size:0.7rem; color:#ad8f60;">#${i+1}</span>`;
+        
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.className = 'diary-page-title-input';
+        titleInput.value = page.title;
+        titleInput.placeholder = '日记标题 · 此刻心情';
+        
+        const contentTextarea = document.createElement('textarea');
+        contentTextarea.className = 'diary-page-content-textarea';
+        contentTextarea.value = page.content;
+        contentTextarea.placeholder = '写下今天的故事、灵感或心事……\n每一页都值得珍藏。';
+        contentTextarea.style.minHeight = '150px';
+        contentTextarea.style.overflowY = 'hidden';
+        
+        pageDiv.appendChild(headerDiv);
+        pageDiv.appendChild(titleInput);
+        pageDiv.appendChild(contentTextarea);
+        
+        let saveTimer = null;
+        const savePage = () => {
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => {
+                const idx = parseInt(pageDiv.dataset.pageIndex);
+                if (activeBook && activeBook.pages[idx]) {
+                    activeBook.pages[idx].title = titleInput.value.trim() || "无题日记";
+                    activeBook.pages[idx].content = contentTextarea.value;
+                    activeBook.pages[idx].updatedAt = new Date().toISOString();
+                    syncActiveBookToBooks();
+                    const dateSpan = pageDiv.querySelector('.diary-page-date');
+                    if (dateSpan) dateSpan.textContent = formatShortDate(activeBook.pages[idx].updatedAt);
+                }
+            }, 300);
+        };
+        titleInput.addEventListener('input', savePage);
+        contentTextarea.addEventListener('input', savePage);
+        
+        const autoResizeTextarea = () => {
+            contentTextarea.style.height = 'auto';
+            contentTextarea.style.height = contentTextarea.scrollHeight + 'px';
+        };
+        contentTextarea.addEventListener('input', autoResizeTextarea);
+        setTimeout(autoResizeTextarea, 0);
+        
+        scrollContainer.appendChild(pageDiv);
+    }
+    
+    const notebookDiv = notebookView.querySelector('.notebook');
+    if (notebookDiv) {
+        const oldPageCard = notebookDiv.querySelector('.page-card');
+        if (oldPageCard) oldPageCard.style.display = 'none';
+        notebookDiv.insertBefore(scrollContainer, notebookDiv.querySelector('.action-bar'));
+        currentVerticalScrollContainer = scrollContainer;
+        
+        const updateCounter = () => {
+            if (pageCounterSpan) pageCounterSpan.innerText = `${activeBook.pages.length} 页`;
+        };
+        updateCounter();
+        
+        if (activeBook.currentPageIndex !== undefined && scrollContainer.children[activeBook.currentPageIndex]) {
+            scrollContainer.children[activeBook.currentPageIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+        
+        let scrollTimer = null;
+        scrollContainer.addEventListener('scroll', () => {
+            if (scrollTimer) clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(() => {
+                const containerRect = scrollContainer.getBoundingClientRect();
+                let bestIndex = 0;
+                let bestDiff = Infinity;
+                for (let i = 0; i < scrollContainer.children.length; i++) {
+                    const child = scrollContainer.children[i];
+                    const rect = child.getBoundingClientRect();
+                    const diff = Math.abs(rect.top - containerRect.top);
+                    if (diff < bestDiff) {
+                        bestDiff = diff;
+                        bestIndex = i;
+                    }
+                }
+                if (activeBook && activeBook.currentPageIndex !== bestIndex) {
+                    activeBook.currentPageIndex = bestIndex;
+                    syncActiveBookToBooks();
+                }
+            }, 100);
+        });
     }
 }
-function flipToPage(targetIndex, skipIfSame = false) {
-    if (isAnimating) return Promise.reject("动画中");
-    if (!activeBook) return Promise.reject();
-    if (targetIndex === activeBook.currentPageIndex && skipIfSame) return Promise.resolve();
-    if (targetIndex < 0 || targetIndex >= activeBook.pages.length) return Promise.reject("越界");
-    syncCurrentPageFromUI();
-    return new Promise((resolve) => {
-        isAnimating = true;
-        pageCard.classList.add('flip-out');
-        const finishOut = () => {
-            pageCard.classList.remove('flip-out');
-            activeBook.currentPageIndex = targetIndex;
-            renderActiveBookUI();
-            pageCard.classList.add('flip-in');
-            setTimeout(() => {
-                pageCard.classList.remove('flip-in');
-                isAnimating = false;
-                syncActiveBookToBooks();
-                resolve();
-            }, 260);
-            pageCard.removeEventListener('transitionend', finishOut);
-        };
-        pageCard.addEventListener('transitionend', finishOut, { once: true });
+
+// 边缘滑动手势相关变量
+let notebookSwipeListenerEnabled = false;
+let notebookSwipeStartX = 0, notebookSwipeStartY = 0;
+let notebookSwipeTriggered = false;
+
+function enableNotebookSwipeToClose() {
+    if (notebookSwipeListenerEnabled) return;
+    notebookSwipeListenerEnabled = true;
+    document.addEventListener('touchstart', onNotebookSwipeStart, { passive: false });
+    document.addEventListener('touchmove', onNotebookSwipeMove, { passive: false });
+    document.addEventListener('touchend', onNotebookSwipeEnd);
+}
+
+function disableNotebookSwipeToClose() {
+    if (!notebookSwipeListenerEnabled) return;
+    notebookSwipeListenerEnabled = false;
+    document.removeEventListener('touchstart', onNotebookSwipeStart);
+    document.removeEventListener('touchmove', onNotebookSwipeMove);
+    document.removeEventListener('touchend', onNotebookSwipeEnd);
+    // 重置状态
+    notebookSwipeTriggered = false;
+}
+
+function onNotebookSwipeStart(e) {
+    // 仅在笔记本视图可见时启用
+    if (!notebookView || notebookView.style.display !== 'block') return;
+    // 检查触摸点是否在左边缘（屏幕左侧 30px 内）
+    const clientX = e.touches[0].clientX;
+    if (clientX > 30) return;
+    // 检查触摸目标是否为可编辑元素（避免干扰文本输入）
+    const target = e.target;
+    const isEditable = target.isContentEditable || 
+                       target.tagName === 'INPUT' || 
+                       target.tagName === 'TEXTAREA' ||
+                       target.closest('input, textarea, [contenteditable="true"]');
+    if (isEditable) return;
+    
+    notebookSwipeStartX = clientX;
+    notebookSwipeStartY = e.touches[0].clientY;
+    notebookSwipeTriggered = false;
+}
+
+function onNotebookSwipeMove(e) {
+    if (notebookSwipeStartX === undefined) return;
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+    const deltaX = clientX - notebookSwipeStartX;
+    const deltaY = clientY - notebookSwipeStartY;
+    
+    // 向右滑动且水平位移大于垂直位移的1.5倍，且超过30px阈值
+    if (deltaX > 30 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && !notebookSwipeTriggered) {
+        e.preventDefault();
+        e.stopPropagation();
+        notebookSwipeTriggered = true;
+        closeNotebookDiary();  // 触发返回书架视图
+    }
+}
+
+function onNotebookSwipeEnd() {
+    notebookSwipeStartX = undefined;
+    notebookSwipeStartY = undefined;
+    notebookSwipeTriggered = false;
+}
+
+// 打开日记本：保存书架滚动位置，启用滑动手势
+function openBookDiary(bookId) {
+    if (isJournalEditMode) return;
+    // 保存当前书架视图的滚动位置
+    const journalSection = document.getElementById('journal-section');
+    if (journalSection) {
+        savedBookshelfScrollTop = journalSection.scrollTop;
+    }
+    const book = books.find(b => b.id === bookId);
+    if (!book) return;
+    activeBookId = book.id;
+    activeBook = JSON.parse(JSON.stringify(book));
+    if (!activeBook.pages || activeBook.pages.length === 0) {
+        activeBook.pages = [{ id: Date.now(), title: "扉页 · 新旅程", content: "翻开崭新的日记本，记录此刻的心情。\n愿每一页都充满温度。", updatedAt: new Date().toISOString() }];
+        activeBook.currentPageIndex = 0;
+    }
+    if (activeBook.currentPageIndex === undefined) activeBook.currentPageIndex = 0;
+    
+    bookshelfView.style.display = 'none';
+    notebookView.style.display = 'block';
+    
+    renderVerticalPages();
+    enableNotebookSwipeToClose();  // 启用边缘滑动手势
+    
+    if (!cleanupBodyScroll) cleanupBodyScroll = preventBodyScrollOnDiary();
+}
+
+// 关闭日记本：恢复书架滚动位置，禁用滑动手势
+function closeNotebookDiary() {
+    if (activeBook) {
+        if (currentVerticalScrollContainer) {
+            const inputs = currentVerticalScrollContainer.querySelectorAll('input, textarea');
+            inputs.forEach(el => {
+                const evt = new Event('input', { bubbles: true });
+                el.dispatchEvent(evt);
+            });
+        }
+        const index = books.findIndex(b => b.id === activeBookId);
+        if (index !== -1) books[index] = JSON.parse(JSON.stringify(activeBook));
+        saveBooksToLocal();
+    }
+    activeBook = null; activeBookId = null;
+    bookshelfView.style.display = 'block';
+    notebookView.style.display = 'none';
+    if (currentVerticalScrollContainer) {
+        currentVerticalScrollContainer.remove();
+        currentVerticalScrollContainer = null;
+    }
+    const oldPageCard = notebookView.querySelector('.page-card');
+    if (oldPageCard) oldPageCard.style.display = '';
+    if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
+    
+    disableNotebookSwipeToClose();  // 禁用边缘滑动手势
+    
+    renderBookshelfUI();  // 重新渲染书架视图
+    
+    // 恢复之前保存的滚动位置
+    const journalSection = document.getElementById('journal-section');
+    if (journalSection && savedBookshelfScrollTop !== undefined) {
         setTimeout(() => {
-            if (isAnimating) {
-                pageCard.classList.remove('flip-out');
-                activeBook.currentPageIndex = targetIndex;
-                renderActiveBookUI();
-                pageCard.classList.add('flip-in');
-                setTimeout(() => {
-                    pageCard.classList.remove('flip-in');
-                    isAnimating = false;
-                    syncActiveBookToBooks();
-                    resolve();
-                }, 250);
-            }
-        }, 320);
-    });
+            journalSection.scrollTop = savedBookshelfScrollTop;
+        }, 0);
+    }
+    
+    exitJournalEditMode();
 }
-function nextPageDiary() {
-    if (isAnimating || !activeBook) return;
-    if (activeBook.currentPageIndex + 1 < activeBook.pages.length) flipToPage(activeBook.currentPageIndex + 1);
-    else { pageCard.style.transform = "translateX(2px)"; setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120); }
-}
-function prevPageDiary() {
-    if (isAnimating || !activeBook) return;
-    if (activeBook.currentPageIndex - 1 >= 0) flipToPage(activeBook.currentPageIndex - 1);
-    else { pageCard.style.transform = "translateX(-2px)"; setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120); }
-}
+
 function addNewDiaryPage() {
-    if (isAnimating || !activeBook) return;
-    syncCurrentPageFromUI();
-    const newPage = { id: Date.now() + Math.random(), title: "✨ 新的一页", content: "", updatedAt: new Date().toISOString() };
+    if (!activeBook) return;
+    const newPage = { id: Date.now(), title: "✨ 新的一页", content: "", updatedAt: new Date().toISOString() };
     activeBook.pages.push(newPage);
-    flipToPage(activeBook.pages.length - 1, true).then(() => syncActiveBookToBooks());
+    activeBook.currentPageIndex = activeBook.pages.length - 1;
+    syncActiveBookToBooks();
+    renderVerticalPages();
+    if (currentVerticalScrollContainer) {
+        setTimeout(() => {
+            currentVerticalScrollContainer.scrollTo({ top: currentVerticalScrollContainer.scrollHeight, behavior: 'smooth' });
+        }, 50);
+    }
 }
+
 function deleteCurrentPage() {
-    if (isAnimating || !activeBook) return;
+    if (!activeBook) return;
     if (activeBook.pages.length <= 1) {
         const confirmReset = confirm("这是最后一页日记，无法删除。\n是否清空内容并重置为空白页？");
         if (confirmReset) {
-            syncCurrentPageFromUI();
-            activeBook.pages[activeBook.currentPageIndex].title = "新的起点";
-            activeBook.pages[activeBook.currentPageIndex].content = "";
-            activeBook.pages[activeBook.currentPageIndex].updatedAt = new Date().toISOString();
-            renderActiveBookUI();
+            activeBook.pages[0].title = "新的起点";
+            activeBook.pages[0].content = "";
+            activeBook.pages[0].updatedAt = new Date().toISOString();
             syncActiveBookToBooks();
+            renderVerticalPages();
         }
         return;
     }
-    syncCurrentPageFromUI();
-    activeBook.pages.splice(activeBook.currentPageIndex, 1);
-    let newIndex = activeBook.currentPageIndex;
-    if (newIndex >= activeBook.pages.length) newIndex = activeBook.pages.length - 1;
-    flipToPage(newIndex, true).then(() => syncActiveBookToBooks());
-}
-function initQuickSlider() {
-    const slider = quickPageSlider;
-    let pendingPage = null;
-    let bubbleTimeout = null;
-    const updateBubble = (pageNum) => {
-        if (!activeBook) return;
-        const pageIndex = pageNum - 1;
-        if (pageIndex >= 0 && pageIndex < activeBook.pages.length) {
-            const page = activeBook.pages[pageIndex];
-            const dateStr = page.updatedAt ? formatShortDate(page.updatedAt) : "无日期";
-            let title = page.title || "无标题";
-            if (title.length > 14) title = title.substring(0, 12) + "...";
-            bubbleLine1.textContent = `第${pageNum}页 · ${dateStr}`;
-            bubbleLine2.textContent = title;
-        } else {
-            bubbleLine1.textContent = `第${pageNum}页`;
-            bubbleLine2.textContent = "—";
-        }
-        sliderBubble.style.opacity = '1';
-        if (bubbleTimeout) clearTimeout(bubbleTimeout);
-        bubbleTimeout = setTimeout(() => {
-            sliderBubble.style.opacity = '0';
-        }, 800);
-    };
-    slider.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        quickPageValue.innerText = `${val} / ${activeBook.pages.length}`;
-        pendingPage = val - 1;
-        updateBubble(val);
-    });
-    slider.addEventListener('change', () => {
-        if (pendingPage !== null && activeBook && !isAnimating && pendingPage !== activeBook.currentPageIndex) {
-            flipToPage(pendingPage);
-            pendingPage = null;
-        }
-        sliderBubble.style.opacity = '0';
-    });
-    slider.addEventListener('touchend', () => {
-        if (pendingPage !== null && activeBook && !isAnimating && pendingPage !== activeBook.currentPageIndex) {
-            flipToPage(pendingPage);
-            pendingPage = null;
-        }
-        sliderBubble.style.opacity = '0';
-    });
-}
-let touchStartXDiary = 0, touchStartYDiary = 0, isSwipingDiary = false;
-function initTouchSwipeDiary() {
-    const card = document.getElementById('pageCard');
-    if (!card) return;
-    card.addEventListener('touchstart', onTouchStartDiary, { passive: false });
-    card.addEventListener('touchmove', onTouchMoveDiary, { passive: false });
-    card.addEventListener('touchend', onTouchEndDiary);
-}
-function removeTouchSwipeDiary() {
-    const card = document.getElementById('pageCard');
-    if (card) {
-        card.removeEventListener('touchstart', onTouchStartDiary);
-        card.removeEventListener('touchmove', onTouchMoveDiary);
-        card.removeEventListener('touchend', onTouchEndDiary);
-    }
-}
-function onTouchStartDiary(e) {
-    if (isAnimating || !activeBook) return;
-    const touch = e.touches[0];
-    touchStartXDiary = touch.clientX;
-    touchStartYDiary = touch.clientY;
-    isSwipingDiary = true;
-}
-function onTouchMoveDiary(e) {
-    if (!isSwipingDiary || isAnimating || !activeBook) return;
-    const deltaX = e.touches[0].clientX - touchStartXDiary;
-    const deltaY = e.touches[0].clientY - touchStartYDiary;
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) e.preventDefault();
-}
-function onTouchEndDiary(e) {
-    if (!isSwipingDiary || isAnimating || !activeBook) { isSwipingDiary = false; return; }
-    const deltaX = e.changedTouches[0].clientX - touchStartXDiary;
-    if (Math.abs(deltaX) > 35) deltaX > 0 ? prevPageDiary() : nextPageDiary();
-    isSwipingDiary = false;
-}
-
-function enterJournalEditMode() {
-    if (isJournalEditMode) return;
-    isJournalEditMode = true;
-    document.body.classList.add('edit-mode-active');
-    if (editModeTip) editModeTip.innerHTML = '';
-    renderBookshelfUI();
-    setTimeout(() => {
-        document.addEventListener('click', handleOutsideClickDiary);
-        document.addEventListener('touchstart', handleOutsideClickDiary);
-    }, 100);
-}
-
-function exitJournalEditMode() {
-    if (!isJournalEditMode) return;
-    isJournalEditMode = false;
-    document.body.classList.remove('edit-mode-active');
-    if (editModeTip) editModeTip.innerHTML = '';
-    document.removeEventListener('click', handleOutsideClickDiary);
-    document.removeEventListener('touchstart', handleOutsideClickDiary);
-    renderBookshelfUI();
-}
-
-function handleOutsideClickDiary(e) {
-    if (!isJournalEditMode) return;
-    const isBookCard = e.target.closest('.book-card');
-    const isDeleteBtn = e.target.closest('.delete-book-btn');
-    const isEditBtn = e.target.closest('.edit-book-btn');
-    if (!isBookCard && !isDeleteBtn && !isEditBtn) {
-        exitJournalEditMode();
+    const idx = activeBook.currentPageIndex;
+    activeBook.pages.splice(idx, 1);
+    let newIdx = idx;
+    if (newIdx >= activeBook.pages.length) newIdx = activeBook.pages.length - 1;
+    activeBook.currentPageIndex = newIdx;
+    syncActiveBookToBooks();
+    renderVerticalPages();
+    if (currentVerticalScrollContainer && currentVerticalScrollContainer.children[newIdx]) {
+        currentVerticalScrollContainer.children[newIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-function editBookName(bookId, bookName, event) {
-    event.stopPropagation();
-    if (!isJournalEditMode) return;
-    const newName = prompt("修改日记本名称", bookName);
-    if (newName && newName.trim()) {
-        const book = books.find(b => b.id === bookId);
-        if (book) {
-            book.name = newName.trim().slice(0, 20);
-            if (activeBookId === bookId && activeBook) {
-                activeBook.name = book.name;
-            }
-            saveBooksToLocal();
-            renderBookshelfUI();
-        }
-    }
-}
-
-function createDragCloneForJournal(element) {
-    const clone = element.cloneNode(true);
-    clone.classList.add('drag-clone');
-    clone.style.position = 'fixed';
-    clone.style.zIndex = '9999';
-    clone.style.pointerEvents = 'none';
-    clone.style.opacity = '1';
-    clone.style.width = element.offsetWidth + 'px';
-    clone.style.height = element.offsetHeight + 'px';
-    clone.style.left = element.getBoundingClientRect().left + 'px';
-    clone.style.top = element.getBoundingClientRect().top + 'px';
-    clone.style.margin = '0';
-    clone.style.padding = '0.5rem 0.3rem';
-    clone.querySelectorAll('.delete-book-btn, .edit-book-btn').forEach(btn => btn.remove());
-    
-    const origIconContainer = element.querySelector('.book-cover-icon');
-    const cloneIconContainer = clone.querySelector('.book-cover-icon');
-    if (origIconContainer && cloneIconContainer) {
-        const origStyles = window.getComputedStyle(origIconContainer);
-        cloneIconContainer.style.fontSize = origStyles.fontSize;
-        cloneIconContainer.style.width = origStyles.width;
-        cloneIconContainer.style.height = origStyles.height;
-        cloneIconContainer.style.display = origStyles.display;
-        cloneIconContainer.style.alignItems = origStyles.alignItems;
-        cloneIconContainer.style.justifyContent = origStyles.justifyContent;
-        cloneIconContainer.style.transform = 'none';
-        cloneIconContainer.style.transition = 'none';
-    }
-    
-    document.body.appendChild(clone);
-    return clone;
-}
-
-function removeDragCloneJournal() {
-    if (journalDragState.clone) {
-        journalDragState.clone.remove();
-        journalDragState.clone = null;
-    }
-}
-
-function stopJournalAutoScroll() {
-    if (journalDragState.autoScrollInterval) {
-        clearInterval(journalDragState.autoScrollInterval);
-        journalDragState.autoScrollInterval = null;
-    }
-    journalDragState.autoScrollSpeed = 0;
-}
-
-function startJournalAutoScroll() {
-    if (journalDragState.autoScrollInterval) return;
-    journalDragState.autoScrollInterval = setInterval(() => {
-        if (journalDragState.autoScrollSpeed !== 0 && journalDragState.dragElement && journalDragState.isDragging) {
-            const scrollContainer = document.querySelector('#journal-section .bookshelf-view');
-            if (scrollContainer) {
-                scrollContainer.scrollTop += journalDragState.autoScrollSpeed;
-                refreshJournalDragOrder(journalDragState.latestClientX, journalDragState.latestClientY);
-            } else {
-                stopJournalAutoScroll();
-            }
-        } else {
-            stopJournalAutoScroll();
-        }
-    }, 20);
-}
-
-function getJournalTargetIndex(clientX, clientY, container) {
-    const elements = document.elementsFromPoint(clientX, clientY);
-    let targetCard = null;
-    for (let el of elements) {
-        if (el.classList && el.classList.contains('book-card') && el !== journalDragState.dragElement) {
-            targetCard = el;
-            break;
-        }
-    }
-    
-    if (targetCard) {
-        const children = Array.from(container.children);
-        return children.indexOf(targetCard);
-    }
-    
-    return -1;
-}
-
-function refreshJournalDragOrder(clientX, clientY) {
-    if (!journalDragState.dragElement || !journalDragState.isDragging) return;
-    const container = document.getElementById('booksGrid');
-    const targetIndex = getJournalTargetIndex(clientX, clientY, container);
-    if (targetIndex !== -1 && targetIndex !== journalDragState.startIndex) {
-        const children = Array.from(container.children);
-        const targetElement = children[targetIndex];
-        if (targetIndex < journalDragState.startIndex) {
-            container.insertBefore(journalDragState.dragElement, targetElement);
-        } else {
-            container.insertBefore(journalDragState.dragElement, targetElement.nextSibling);
-        }
-        journalDragState.startIndex = targetIndex;
-    }
-}
-
-function onJournalDragMove(e) {
-    if (!journalDragState.dragElement || !journalDragState.isDragging) return;
-    
-    const clientX = e.clientX ?? (e.touches ? e.touches[0].clientX : 0);
-    const clientY = e.clientY ?? (e.touches ? e.touches[0].clientY : 0);
-    journalDragState.latestClientX = clientX;
-    journalDragState.latestClientY = clientY;
-    
-    e.preventDefault();
-    
-    if (journalDragState.clone) {
-        const dx = clientX - journalDragState.startX;
-        const dy = clientY - journalDragState.startY;
-        journalDragState.clone.style.left = (journalDragState.cloneStartLeft + dx) + 'px';
-        journalDragState.clone.style.top = (journalDragState.cloneStartTop + dy) + 'px';
-    }
-    
-    refreshJournalDragOrder(clientX, clientY);
-    
-    const scrollContainer = document.querySelector('#journal-section .bookshelf-view');
-    if (scrollContainer) {
-        const rect = scrollContainer.getBoundingClientRect();
-        const topThreshold = 70;
-        const bottomThreshold = 70;
-        const maxSpeed = 12;
-        let speed = 0;
-        if (clientY < rect.top + topThreshold) {
-            speed = -Math.min(maxSpeed, (rect.top + topThreshold - clientY) / 8);
-        } else if (clientY > rect.bottom - bottomThreshold) {
-            speed = Math.min(maxSpeed, (clientY - (rect.bottom - bottomThreshold)) / 8);
-        }
-        if (speed !== 0) {
-            journalDragState.autoScrollSpeed = speed;
-            startJournalAutoScroll();
-        } else {
-            stopJournalAutoScroll();
-        }
+function prevPageDiary() {
+    if (!activeBook || !currentVerticalScrollContainer) return;
+    const newIdx = activeBook.currentPageIndex - 1;
+    if (newIdx >= 0) {
+        currentVerticalScrollContainer.children[newIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        activeBook.currentPageIndex = newIdx;
+        syncActiveBookToBooks();
     } else {
-        stopJournalAutoScroll();
+        pageCard.style.transform = "translateX(-2px)";
+        setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120);
     }
 }
 
-function onJournalDragEnd(e) {
-    if (journalDragLongPressTimer) {
-        clearTimeout(journalDragLongPressTimer);
-        journalDragLongPressTimer = null;
+function nextPageDiary() {
+    if (!activeBook || !currentVerticalScrollContainer) return;
+    const newIdx = activeBook.currentPageIndex + 1;
+    if (newIdx < activeBook.pages.length) {
+        currentVerticalScrollContainer.children[newIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        activeBook.currentPageIndex = newIdx;
+        syncActiveBookToBooks();
+    } else {
+        pageCard.style.transform = "translateX(2px)";
+        setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120);
     }
-    document.removeEventListener('mouseup', onJournalDragEnd);
-    document.removeEventListener('touchmove', onJournalDragMove);
-    document.removeEventListener('touchend', onJournalDragEnd);
-    
-    if (journalDragState.isDragging && journalDragState.dragElement) {
-        journalDragState.dragElement.style.opacity = '';
-        journalDragState.dragElement.style.pointerEvents = '';
-        
-        removeDragCloneJournal();
-        
-        const container = document.getElementById('booksGrid');
-        const newOrder = [];
-        for (let child of container.children) {
-            const id = parseInt(child.dataset.id);
-            const book = books.find(b => b.id === id);
-            if (book) newOrder.push(book);
-        }
-        books = newOrder;
+}
+
+function bindDiaryEvents() {
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const addBtn = document.getElementById('addPageBtn');
+    const delBtn = document.getElementById('deletePageBtn');
+    const backBtn = document.getElementById('backToShelfBtn');
+    if (prevBtn) prevBtn.onclick = (e) => { prevPageDiary(); };
+    if (nextBtn) nextBtn.onclick = (e) => { nextPageDiary(); };
+    if (addBtn) addBtn.onclick = (e) => { addNewDiaryPage(); };
+    if (delBtn) delBtn.onclick = (e) => { deleteCurrentPage(); };
+    if (backBtn) backBtn.onclick = (e) => { closeNotebookDiary(); };
+}
+
+function initDataDiary() {
+    const stored = localStorage.getItem('paper_multi_books');
+    if (stored) { try { books = JSON.parse(stored); if (!books.length) throw new Error(); } catch(e) { books = []; } }
+    if (!books || books.length === 0) {
+        const examplePages = [
+            { id: Date.now()+1, title: "午后 · 咖啡与光", content: "窗外的梧桐叶被风吹得很轻，\n翻开新笔记本的第一页，仿佛能听见纸张纤维舒展的声音。\n今天用这支新墨水写日记，心情忽然变得柔软。\n\n希望往后的日子，都能在这里种下星星。", updatedAt: new Date().toISOString() },
+            { id: Date.now()+2, title: "雨天的灵感", content: "淅淅沥沥的雨，最适合窝在沙发里。\n读了半本诗集，决定把偶然想到的短句记下来：\n「记忆是倒着飞的雨滴，落进瞳孔里长成森林」\n\n写日记本身，就是一种治愈。", updatedAt: new Date().toISOString() },
+            { id: Date.now()+3, title: "今日小确幸", content: "收到一束朋友寄来的干花，压在日记本的末页。\n翻页时会闻到淡淡的薰衣草气味。\n生活需要这样的仪式感，每一页都值得被温柔对待。\n\n明天也要好好记录 ✨", updatedAt: new Date().toISOString() }
+        ];
+        const demoBook = { id: 1001, name: "纸间·旧时光", coverColor: "#f8efdc", pages: examplePages, currentPageIndex: 0, createdAt: new Date().toISOString() };
+        const secondBook = { id: 1002, name: "灵感手札", coverColor: "#f2e8d4", pages: [{ id: Date.now(), title: "开始", content: "新的故事，从今天启程。", updatedAt: new Date().toISOString() }], currentPageIndex: 0, createdAt: new Date().toISOString() };
+        books = [demoBook, secondBook];
         saveBooksToLocal();
-        renderBookshelfUI();
-        if (isJournalEditMode) {
-            bindDragEventsToBooks();
-        }
     }
-    stopJournalAutoScroll();
-    journalDragState.isDragging = false;
-    journalDragState.dragElement = null;
-    journalDragState.startIndex = -1;
-    journalDragState.cloneStartLeft = null;
-    journalDragState.cloneStartTop = null;
-    removeDragCloneJournal();
-}
-
-function startJournalDragAfterLongPress(element, clientX, clientY) {
-    if (!isJournalEditMode) return;
-    if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer);
-    journalDragLongPressTimer = setTimeout(() => {
-        journalDragState.dragElement = element;
-        journalDragState.startX = clientX;
-        journalDragState.startY = clientY;
-        journalDragState.startIndex = Array.from(element.parentNode.children).indexOf(element);
-        journalDragState.isDragging = true;
-        const rect = element.getBoundingClientRect();
-        journalDragState.cloneStartLeft = rect.left;
-        journalDragState.cloneStartTop = rect.top;
-        journalDragState.clone = createDragCloneForJournal(element);
-        element.style.opacity = '0';
-        element.style.pointerEvents = 'none';
-        
-        document.addEventListener('touchmove', onJournalDragMove, { passive: false });
-        document.addEventListener('touchend', onJournalDragEnd);
-        document.addEventListener('mousemove', onJournalDragMove);
-        document.addEventListener('mouseup', onJournalDragEnd);
-    }, 400);
-}
-
-function bindDragEventsToBooks() {
-    const cards = document.querySelectorAll('#booksGrid .book-card');
-    cards.forEach(card => {
-        card.removeEventListener('mousedown', onBookMouseDown);
-        card.removeEventListener('touchstart', onBookTouchStart);
-        card.addEventListener('mousedown', onBookMouseDown);
-        card.addEventListener('touchstart', onBookTouchStart, { passive: false });
-    });
-}
-
-function onBookMouseDown(e) {
-    if (!isJournalEditMode) return;
-    if (e.target.closest('.delete-book-btn') || e.target.closest('.edit-book-btn')) return;
-    e.stopPropagation();
-    const card = e.target.closest('.book-card');
-    if (!card) return;
-    if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer);
-    journalDragLongPressTimer = setTimeout(() => {
-        startJournalDragAfterLongPress(card, e.clientX, e.clientY);
-    }, 400);
-    card.mouseStartX = e.clientX;
-    card.mouseStartY = e.clientY;
-    const onMouseMoveWhileWaiting = (moveEvent) => {
-        if (Math.abs(moveEvent.clientX - card.mouseStartX) > 10 ||
-            Math.abs(moveEvent.clientY - card.mouseStartY) > 10) {
-            clearTimeout(journalDragLongPressTimer);
-            journalDragLongPressTimer = null;
-            document.removeEventListener('mousemove', onMouseMoveWhileWaiting);
-        }
-    };
-    document.addEventListener('mousemove', onMouseMoveWhileWaiting);
-    card.addEventListener('mouseup', () => {
-        clearTimeout(journalDragLongPressTimer);
-        journalDragLongPressTimer = null;
-        document.removeEventListener('mousemove', onMouseMoveWhileWaiting);
-    });
-}
-
-function onBookTouchStart(e) {
-    if (!isJournalEditMode) return;
-    if (e.target.closest('.delete-book-btn') || e.target.closest('.edit-book-btn')) return;
-    e.stopPropagation();
-    const card = e.target.closest('.book-card');
-    if (!card) return;
-    const touch = e.touches[0];
-    if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer);
-    journalDragLongPressTimer = setTimeout(() => {
-        startJournalDragAfterLongPress(card, touch.clientX, touch.clientY);
-    }, 400);
-    card.touchStartX = touch.clientX;
-    card.touchStartY = touch.clientY;
-    const onTouchMoveWhileWaiting = (moveEvent) => {
-        const moveTouch = moveEvent.touches[0];
-        if (Math.abs(moveTouch.clientX - card.touchStartX) > 10 ||
-            Math.abs(moveTouch.clientY - card.touchStartY) > 10) {
-            clearTimeout(journalDragLongPressTimer);
-            journalDragLongPressTimer = null;
-            document.removeEventListener('touchmove', onTouchMoveWhileWaiting);
-        }
-    };
-    document.addEventListener('touchmove', onTouchMoveWhileWaiting);
-    card.addEventListener('touchend', () => {
-        clearTimeout(journalDragLongPressTimer);
-        journalDragLongPressTimer = null;
-        document.removeEventListener('touchmove', onTouchMoveWhileWaiting);
-    });
-}
-
-function deleteBook(bookId, event) {
-    event.stopPropagation();
-    if (!isJournalEditMode) return;
-    if (books.length <= 1) { alert("至少保留一本日记本，无法删除。"); return; }
-    books = books.filter(b => b.id !== bookId);
-    if (activeBookId === bookId) closeNotebookDiary();
-    saveBooksToLocal();
     renderBookshelfUI();
-    if (isJournalEditMode) {
-        bindDragEventsToBooks();
-    }
+    bindDiaryEvents();
 }
 
 function renderBookshelfUI() {
@@ -6496,11 +6311,67 @@ function renderBookshelfUI() {
         const editBtn = card.querySelector('.edit-book-btn');
         if (editBtn) editBtn.addEventListener('click', (e) => editBookName(id, book.name, e));
     });
-    if (isJournalEditMode) {
-        bindDragEventsToBooks();
-    } else {
-        bindLongPressToEnterEditMode();
+    if (isJournalEditMode) bindDragEventsToBooks();
+    else bindLongPressToEnterEditMode();
+}
+
+function deleteBook(bookId, event) {
+    event.stopPropagation();
+    if (!isJournalEditMode) return;
+    const journalSectionEl = document.getElementById('journal-section');
+    const oldScrollTop = journalSectionEl ? journalSectionEl.scrollTop : 0;
+    if (books.length <= 1) { alert("至少保留一本日记本，无法删除。"); return; }
+    books = books.filter(b => b.id !== bookId);
+    if (activeBookId === bookId) closeNotebookDiary();
+    saveBooksToLocal();
+    renderBookshelfUI();
+    if (journalSectionEl) journalSectionEl.scrollTop = oldScrollTop;
+}
+
+function editBookName(bookId, bookName, event) {
+    event.stopPropagation();
+    if (!isJournalEditMode) return;
+    const journalSectionEl = document.getElementById('journal-section');
+    const oldScrollTop = journalSectionEl ? journalSectionEl.scrollTop : 0;
+    const newName = prompt("修改日记本名称", bookName);
+    if (newName && newName.trim()) {
+        const book = books.find(b => b.id === bookId);
+        if (book) {
+            book.name = newName.trim().slice(0, 20);
+            if (activeBookId === bookId && activeBook) activeBook.name = book.name;
+            saveBooksToLocal();
+            renderBookshelfUI();
+            if (journalSectionEl) journalSectionEl.scrollTop = oldScrollTop;
+        }
     }
+}
+
+function enterJournalEditMode() {
+    if (isJournalEditMode) return;
+    isJournalEditMode = true;
+    document.body.classList.add('edit-mode-active');
+    renderBookshelfUI();
+    setTimeout(() => {
+        document.addEventListener('click', handleOutsideClickDiary);
+        document.addEventListener('touchstart', handleOutsideClickDiary);
+    }, 100);
+}
+
+function exitJournalEditMode() {
+    if (!isJournalEditMode) return;
+    isJournalEditMode = false;
+    document.body.classList.remove('edit-mode-active');
+    document.removeEventListener('click', handleOutsideClickDiary);
+    document.removeEventListener('touchstart', handleOutsideClickDiary);
+    renderBookshelfUI();
+}
+
+function handleOutsideClickDiary(e) {
+    if (!isJournalEditMode) return;
+    const isBookCard = e.target.closest('.book-card');
+    const isDeleteBtn = e.target.closest('.delete-book-btn');
+    const isEditBtn = e.target.closest('.edit-book-btn');
+    if (!isBookCard && !isDeleteBtn && !isEditBtn) exitJournalEditMode();
 }
 
 function bindLongPressToEnterEditMode() {
@@ -6509,13 +6380,9 @@ function bindLongPressToEnterEditMode() {
         let pressTimer = null;
         const startLongPress = () => {
             if (isJournalEditMode) return;
-            pressTimer = setTimeout(() => {
-                enterJournalEditMode();
-            }, 500);
+            pressTimer = setTimeout(() => enterJournalEditMode(), 500);
         };
-        const cancelLongPress = () => {
-            if (pressTimer) clearTimeout(pressTimer);
-        };
+        const cancelLongPress = () => { if (pressTimer) clearTimeout(pressTimer); };
         card.removeEventListener('touchstart', startLongPress);
         card.removeEventListener('touchend', cancelLongPress);
         card.removeEventListener('touchmove', cancelLongPress);
@@ -6531,123 +6398,36 @@ function bindLongPressToEnterEditMode() {
     });
 }
 
-function openBookDiary(bookId) {
-    if (isJournalEditMode) return;
-    const book = books.find(b => b.id === bookId);
-    if (!book) return;
-    activeBookId = book.id;
-    activeBook = JSON.parse(JSON.stringify(book));
-    activeBook.pages = activeBook.pages.map(p => ({ ...p, content: p.content || "", title: p.title || "无题" }));
-    if (!activeBook.currentPageIndex) activeBook.currentPageIndex = 0;
-    renderActiveBookUI();
-    bookshelfView.style.display = 'none';
-    notebookView.style.display = 'block';
-    removeTouchSwipeDiary();
-    initTouchSwipeDiary();
-    syncActiveBookToBooks();
+function createDragCloneForJournal(element) {
+    const clone = element.cloneNode(true);
+    clone.classList.add('drag-clone');
+    clone.style.position = 'fixed';
+    clone.style.zIndex = '9999';
+    clone.style.pointerEvents = 'none';
+    clone.style.opacity = '1';
+    clone.style.width = element.offsetWidth + 'px';
+    clone.style.height = element.offsetHeight + 'px';
+    clone.style.left = element.getBoundingClientRect().left + 'px';
+    clone.style.top = element.getBoundingClientRect().top + 'px';
+    clone.style.margin = '0';
+    clone.style.padding = '0.5rem 0.3rem';
+    clone.querySelectorAll('.delete-book-btn, .edit-book-btn').forEach(btn => btn.remove());
+    document.body.appendChild(clone);
+    return clone;
 }
 
-function closeNotebookDiary() {
-    if (activeBook) {
-        syncCurrentPageFromUI();
-        const idx = books.findIndex(b => b.id === activeBookId);
-        if (idx !== -1) books[idx] = JSON.parse(JSON.stringify(activeBook));
-        saveBooksToLocal();
-    }
-    activeBook = null; activeBookId = null;
-    bookshelfView.style.display = 'block';
-    notebookView.style.display = 'none';
-    removeTouchSwipeDiary();
-    renderBookshelfUI();
-    exitJournalEditMode();
-}
+function removeDragCloneJournal() { if (journalDragState.clone) { journalDragState.clone.remove(); journalDragState.clone = null; } }
+function stopJournalAutoScroll() { if (journalDragState.autoScrollInterval) { clearInterval(journalDragState.autoScrollInterval); journalDragState.autoScrollInterval = null; } journalDragState.autoScrollSpeed = 0; }
+function startJournalAutoScroll() { if (journalDragState.autoScrollInterval) return; journalDragState.autoScrollInterval = setInterval(() => { if (journalDragState.autoScrollSpeed !== 0 && journalDragState.dragElement && journalDragState.isDragging) { const scrollContainer = document.querySelector('#journal-section .bookshelf-view'); if (scrollContainer) { scrollContainer.scrollTop += journalDragState.autoScrollSpeed; refreshJournalDragOrder(journalDragState.latestClientX, journalDragState.latestClientY); } else stopJournalAutoScroll(); } else stopJournalAutoScroll(); }, 20); }
+function getJournalTargetIndex(clientX, clientY, container) { const elements = document.elementsFromPoint(clientX, clientY); let targetCard = null; for (let el of elements) { if (el.classList && el.classList.contains('book-card') && el !== journalDragState.dragElement) { targetCard = el; break; } } if (targetCard) { const children = Array.from(container.children); return children.indexOf(targetCard); } return -1; }
+function refreshJournalDragOrder(clientX, clientY) { if (!journalDragState.dragElement || !journalDragState.isDragging) return; const container = document.getElementById('booksGrid'); const targetIndex = getJournalTargetIndex(clientX, clientY, container); if (targetIndex !== -1 && targetIndex !== journalDragState.startIndex) { const children = Array.from(container.children); const targetElement = children[targetIndex]; if (targetIndex < journalDragState.startIndex) container.insertBefore(journalDragState.dragElement, targetElement); else container.insertBefore(journalDragState.dragElement, targetElement.nextSibling); journalDragState.startIndex = targetIndex; } }
+function onJournalDragMove(e) { if (!journalDragState.dragElement || !journalDragState.isDragging) return; const clientX = e.clientX ?? (e.touches ? e.touches[0].clientX : 0); const clientY = e.clientY ?? (e.touches ? e.touches[0].clientY : 0); journalDragState.latestClientX = clientX; journalDragState.latestClientY = clientY; e.preventDefault(); if (journalDragState.clone) { const dx = clientX - journalDragState.startX; const dy = clientY - journalDragState.startY; journalDragState.clone.style.left = (journalDragState.cloneStartLeft + dx) + 'px'; journalDragState.clone.style.top = (journalDragState.cloneStartTop + dy) + 'px'; } refreshJournalDragOrder(clientX, clientY); const scrollContainer = document.querySelector('#journal-section .bookshelf-view'); if (scrollContainer) { const rect = scrollContainer.getBoundingClientRect(); const topThreshold = 70; const bottomThreshold = 70; const maxSpeed = 12; let speed = 0; if (clientY < rect.top + topThreshold) speed = -Math.min(maxSpeed, (rect.top + topThreshold - clientY) / 8); else if (clientY > rect.bottom - bottomThreshold) speed = Math.min(maxSpeed, (clientY - (rect.bottom - bottomThreshold)) / 8); if (speed !== 0) { journalDragState.autoScrollSpeed = speed; startJournalAutoScroll(); } else stopJournalAutoScroll(); } else stopJournalAutoScroll(); }
+function onJournalDragEnd(e) { if (journalDragLongPressTimer) { clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = null; } document.removeEventListener('mouseup', onJournalDragEnd); document.removeEventListener('touchmove', onJournalDragMove); document.removeEventListener('touchend', onJournalDragEnd); if (journalDragState.isDragging && journalDragState.dragElement) { journalDragState.dragElement.style.opacity = ''; journalDragState.dragElement.style.pointerEvents = ''; removeDragCloneJournal(); const container = document.getElementById('booksGrid'); const newOrder = []; for (let child of container.children) { const id = parseInt(child.dataset.id); const book = books.find(b => b.id === id); if (book) newOrder.push(book); } books = newOrder; saveBooksToLocal(); renderBookshelfUI(); if (isJournalEditMode) bindDragEventsToBooks(); } stopJournalAutoScroll(); journalDragState.isDragging = false; journalDragState.dragElement = null; journalDragState.startIndex = -1; journalDragState.cloneStartLeft = null; journalDragState.cloneStartTop = null; removeDragCloneJournal(); }
+function startJournalDragAfterLongPress(element, clientX, clientY) { if (!isJournalEditMode) return; if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = setTimeout(() => { journalDragState.dragElement = element; journalDragState.startX = clientX; journalDragState.startY = clientY; journalDragState.startIndex = Array.from(element.parentNode.children).indexOf(element); journalDragState.isDragging = true; const rect = element.getBoundingClientRect(); journalDragState.cloneStartLeft = rect.left; journalDragState.cloneStartTop = rect.top; journalDragState.clone = createDragCloneForJournal(element); element.style.opacity = '0'; element.style.pointerEvents = 'none'; document.addEventListener('touchmove', onJournalDragMove, { passive: false }); document.addEventListener('touchend', onJournalDragEnd); document.addEventListener('mousemove', onJournalDragMove); document.addEventListener('mouseup', onJournalDragEnd); }, 400); }
+function bindDragEventsToBooks() { const cards = document.querySelectorAll('#booksGrid .book-card'); cards.forEach(card => { card.removeEventListener('mousedown', onBookMouseDown); card.removeEventListener('touchstart', onBookTouchStart); card.addEventListener('mousedown', onBookMouseDown); card.addEventListener('touchstart', onBookTouchStart, { passive: false }); }); }
+function onBookMouseDown(e) { if (!isJournalEditMode) return; if (e.target.closest('.delete-book-btn') || e.target.closest('.edit-book-btn')) return; e.stopPropagation(); const card = e.target.closest('.book-card'); if (!card) return; if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = setTimeout(() => { startJournalDragAfterLongPress(card, e.clientX, e.clientY); }, 400); card.mouseStartX = e.clientX; card.mouseStartY = e.clientY; const onMouseMoveWhileWaiting = (moveEvent) => { if (Math.abs(moveEvent.clientX - card.mouseStartX) > 10 || Math.abs(moveEvent.clientY - card.mouseStartY) > 10) { clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = null; document.removeEventListener('mousemove', onMouseMoveWhileWaiting); } }; document.addEventListener('mousemove', onMouseMoveWhileWaiting); card.addEventListener('mouseup', () => { clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = null; document.removeEventListener('mousemove', onMouseMoveWhileWaiting); }); }
+function onBookTouchStart(e) { if (!isJournalEditMode) return; if (e.target.closest('.delete-book-btn') || e.target.closest('.edit-book-btn')) return; e.stopPropagation(); const card = e.target.closest('.book-card'); if (!card) return; const touch = e.touches[0]; if (journalDragLongPressTimer) clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = setTimeout(() => { startJournalDragAfterLongPress(card, touch.clientX, touch.clientY); }, 400); card.touchStartX = touch.clientX; card.touchStartY = touch.clientY; const onTouchMoveWhileWaiting = (moveEvent) => { const moveTouch = moveEvent.touches[0]; if (Math.abs(moveTouch.clientX - card.touchStartX) > 10 || Math.abs(moveTouch.clientY - card.touchStartY) > 10) { clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = null; document.removeEventListener('touchmove', onTouchMoveWhileWaiting); } }; document.addEventListener('touchmove', onTouchMoveWhileWaiting); card.addEventListener('touchend', () => { clearTimeout(journalDragLongPressTimer); journalDragLongPressTimer = null; document.removeEventListener('touchmove', onTouchMoveWhileWaiting); }); }
 
-function createNewBook() {
-    let bookName = prompt("📓 给新日记本起个名字吧", "手札·时光集");
-    if (bookName === null) return;
-    if (!bookName.trim()) bookName = "未名日记";
-    const newBook = { id: Date.now(), name: bookName.slice(0, 20), coverColor: "#faf2e4", pages: [{ id: Date.now()+1, title: "扉页 · 新旅程", content: "翻开崭新的日记本，记录此刻的心情。\n愿每一页都充满温度。", updatedAt: new Date().toISOString() }], currentPageIndex: 0, createdAt: new Date().toISOString() };
-    books.push(newBook);
-    saveBooksToLocal();
-    renderBookshelfUI();
-}
-
-function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-function initDataDiary() {
-    const stored = localStorage.getItem('paper_multi_books');
-    if (stored) { try { books = JSON.parse(stored); if (!books.length) throw new Error(); } catch(e) { books = []; } }
-    if (!books || books.length === 0) {
-        const examplePages = [
-            { id: Date.now()+1, title: "午后 · 咖啡与光", content: "窗外的梧桐叶被风吹得很轻，\n翻开新笔记本的第一页，仿佛能听见纸张纤维舒展的声音。\n今天用这支新墨水写日记，心情忽然变得柔软。\n\n希望往后的日子，都能在这里种下星星。", updatedAt: new Date().toISOString() },
-            { id: Date.now()+2, title: "雨天的灵感", content: "淅淅沥沥的雨，最适合窝在沙发里。\n读了半本诗集，决定把偶然想到的短句记下来：\n「记忆是倒着飞的雨滴，落进瞳孔里长成森林」\n\n写日记本身，就是一种治愈。", updatedAt: new Date().toISOString() },
-            { id: Date.now()+3, title: "今日小确幸", content: "收到一束朋友寄来的干花，压在日记本的末页。\n翻页时会闻到淡淡的薰衣草气味。\n生活需要这样的仪式感，每一页都值得被温柔对待。\n\n明天也要好好记录 ✨", updatedAt: new Date().toISOString() }
-        ];
-        const demoBook = { id: 1001, name: "纸间·旧时光", coverColor: "#f8efdc", pages: examplePages, currentPageIndex: 0, createdAt: new Date().toISOString() };
-        const secondBook = { id: 1002, name: "灵感手札", coverColor: "#f2e8d4", pages: [{ id: Date.now(), title: "开始", content: "新的故事，从今天启程。", updatedAt: new Date().toISOString() }], currentPageIndex: 0, createdAt: new Date().toISOString() };
-        books = [demoBook, secondBook];
-        saveBooksToLocal();
-    }
-    renderBookshelfUI();
-}
-function bindDiaryEvents() {
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
-    const addBtn = document.getElementById('addPageBtn');
-    const delBtn = document.getElementById('deletePageBtn');
-    const backBtn = document.getElementById('backToShelfBtn');
-
-    if (prevBtn) {
-        const orig = prevBtn.onclick;
-        prevBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else prevPageDiary(); };
-    }
-    if (nextBtn) {
-        const orig = nextBtn.onclick;
-        nextBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else nextPageDiary(); };
-    }
-    if (addBtn) {
-        const orig = addBtn.onclick;
-        addBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else addNewDiaryPage(); };
-    }
-    if (delBtn) {
-        const orig = delBtn.onclick;
-        delBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else deleteCurrentPage(); };
-    }
-    if (backBtn) {
-        const orig = backBtn.onclick;
-        backBtn.onclick = (e) => { window.fixKeyboardLayout(); if (orig) orig(e); else closeNotebookDiary(); };
-    }
-
-    initQuickSlider();
-    window.addEventListener('keydown', (e) => {
-        if (notebookView.style.display !== 'block') return;
-        if (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT') return;
-        if (e.key === 'ArrowLeft') { e.preventDefault(); prevPageDiary(); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); nextPageDiary(); }
-    });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && activeBook) syncCurrentPageFromUI(); });
-    window.addEventListener('beforeunload', () => { if (activeBook) syncCurrentPageFromUI(); });
-    setInterval(() => { if (activeBook && !isAnimating) syncCurrentPageFromUI(); }, 2500);
-}
-function setupAutoSaveDiary() {
-    const saveDelayed = () => { if (autoSaveTimer) clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => { if (activeBook) syncCurrentPageFromUI(); }, 180); };
-    diaryTitle.addEventListener('input', saveDelayed);
-    diaryContent.addEventListener('input', saveDelayed);
-}
-function initJournalModule() {
-    if (!bookshelfView || !notebookView) return;
-    initDataDiary();
-    setupAutoSaveDiary();
-    bindDiaryEvents();
-    bookshelfView.style.display = 'block';
-    notebookView.style.display = 'none';
-    if (journalAddBookBtn) {
-        journalAddBookBtn.onclick = () => {
-            createNewBook();
-        };
-    }
-    // 初始化日记设置模态框（无底部按钮，增加清空功能）
-    initJournalSettingsModal();
-}
 function refreshJournalOnShow() {
     if (journalSection && journalSection.classList.contains('active')) {
         if (notebookView && notebookView.style.display === 'block') {
@@ -6657,204 +6437,47 @@ function refreshJournalOnShow() {
         }
     }
 }
-window.refreshJournalOnShow = refreshJournalOnShow;
+
+function initJournalModule() {
+    initDataDiary();
+    if (journalAddBookBtn) journalAddBookBtn.onclick = () => { createNewBook(); };
+    initJournalSettingsModal();
+}
+function createNewBook() {
+    const journalSectionEl = document.getElementById('journal-section');
+    const oldScrollTop = journalSectionEl ? journalSectionEl.scrollTop : 0;
+    let bookName = prompt("📓 给新日记本起个名字吧", "手札·时光集");
+    if (bookName === null) return;
+    if (!bookName.trim()) bookName = "未名日记";
+    const newBook = { id: Date.now(), name: bookName.slice(0, 20), coverColor: "#faf2e4", pages: [{ id: Date.now()+1, title: "扉页 · 新旅程", content: "翻开崭新的日记本，记录此刻的心情。\n愿每一页都充满温度。", updatedAt: new Date().toISOString() }], currentPageIndex: 0, createdAt: new Date().toISOString() };
+    books.push(newBook);
+    saveBooksToLocal();
+    renderBookshelfUI();
+    if (journalSectionEl) journalSectionEl.scrollTop = oldScrollTop;
+}
+function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
 
 function preventBodyScrollOnDiary() {
-    const handleTouchMove = function(e) {
-        if (notebookView && notebookView.style.display === 'block') {
-            e.preventDefault();
-        }
-    };
-    document.body.addEventListener('touchmove', handleTouchMove, { passive: false });
-    return () => document.body.removeEventListener('touchmove', handleTouchMove);
+   return () => {};
 }
+
 let cleanupBodyScroll = null;
-const originalObserver = new MutationObserver(function(mutations) {
-    for (let mut of mutations) {
-        if (mut.attributeName === 'style' && mut.target === notebookView) {
-            if (notebookView.style.display === 'block') {
-                if (!cleanupBodyScroll) {
-                    cleanupBodyScroll = preventBodyScrollOnDiary();
-                }
-            } else {
-                if (cleanupBodyScroll) {
-                    cleanupBodyScroll();
-                    cleanupBodyScroll = null;
-                }
-            }
-            break;
-        }
-    }
-});
-originalObserver.observe(notebookView, { attributes: true });
-
-if (navJournal) {
-    const originalJournalClick = navJournal.onclick;
-    navJournal.onclick = function(e) {
-        if (originalJournalClick) originalJournalClick(e);
-        if (notebookView && notebookView.style.display === 'block') {
-            if (!cleanupBodyScroll) cleanupBodyScroll = preventBodyScrollOnDiary();
-        } else {
-            if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
-        }
-    };
-}
-if (navPunch) {
-    const originalPunchClick = navPunch.onclick;
-    navPunch.onclick = function(e) {
-        if (originalPunchClick) originalPunchClick(e);
-        if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
-    };
-}
-if (navTime) {
-    const originalTimeClick = navTime.onclick;
-    navTime.onclick = function(e) {
-        if (originalTimeClick) originalTimeClick(e);
-        if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
-    };
-}
-if (navCalendar) {
-    const originalCalendarClick = navCalendar.onclick;
-    navCalendar.onclick = function(e) {
-        if (originalCalendarClick) originalCalendarClick(e);
-        if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
-    };
-}
-
-// ================== 日记单独导出/导入 + 清空日记数据 ==================
-const journalSettingsModal = document.getElementById('journal-settings-modal');
-const closeJournalSettingsBtn = document.getElementById('close-journal-settings');
-const exportJournalBtn = document.getElementById('export-journal-data');
-const importJournalBtn = document.getElementById('import-journal-data');
-const clearJournalDataBtn = document.getElementById('clear-journal-data-btn');
-let journalImportFileInput = null;
-
-function exportJournalData() {
-    try {
-        const dataStr = JSON.stringify(books, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `元气打卡_日记备份_${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('日记导出成功！');
-    } catch (err) {
-        console.error(err);
-        showToast('导出失败：' + err.message);
-    }
-}
-
-function importJournalData(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            let fileContent = e.target.result;
-            if (fileContent.charCodeAt(0) === 0xFEFF) {
-                fileContent = fileContent.slice(1);
-            }
-            const importedBooks = JSON.parse(fileContent);
-            
-            if (!Array.isArray(importedBooks)) {
-                throw new Error('无效的日记备份文件：根数据不是数组');
-            }
-            for (let book of importedBooks) {
-                if (!book.id || !book.name || !Array.isArray(book.pages)) {
-                    throw new Error('日记数据结构不完整，导入失败');
-                }
-            }
-            
-            if (confirm(`导入日记将覆盖当前所有日记本（共 ${books.length} 本），是否继续？`)) {
-                if (notebookView && notebookView.style.display === 'block') {
-                    closeNotebookDiary();
-                }
-                books = importedBooks;
-                saveBooksToLocal();
-                renderBookshelfUI();
-                if (journalSection && journalSection.classList.contains('active')) {
-                    if (bookshelfView) bookshelfView.style.display = 'block';
-                    if (notebookView) notebookView.style.display = 'none';
-                    renderBookshelfUI();
-                }
-                showToast(`日记导入成功，共 ${books.length} 本日记本`);
-            }
-        } catch (err) {
-            console.error(err);
-            showToast('导入失败：' + err.message);
-        }
-        event.target.value = '';
-    };
-    reader.onerror = () => showToast('读取文件失败');
-    reader.readAsText(file, 'UTF-8');
-}
-
-function clearAllJournalData() {
-    if (confirm('⚠️ 警告：此操作将永久删除所有日记本及日记内容，不可恢复！确定要继续吗？')) {
-        if (notebookView && notebookView.style.display === 'block') {
-            closeNotebookDiary();
-        }
-        books = [];
-        localStorage.removeItem('paper_multi_books');
-        initDataDiary();  // 重新创建默认日记本
-        renderBookshelfUI();
-        if (journalSection && journalSection.classList.contains('active')) {
-            if (bookshelfView) bookshelfView.style.display = 'block';
-            if (notebookView) notebookView.style.display = 'none';
-            renderBookshelfUI();
-        }
-        showToast('日记数据已清空，已重新创建默认日记本');
-    }
-}
 
 function initJournalSettingsModal() {
+    const journalSettingsModal = document.getElementById('journal-settings-modal');
+    const closeJournalSettingsBtn = document.getElementById('close-journal-settings');
+    const exportJournalBtn = document.getElementById('export-journal-data');
+    const importJournalBtn = document.getElementById('import-journal-data');
+    const clearJournalDataBtn = document.getElementById('clear-journal-data-btn');
     if (!journalSettingsModal) return;
-    
-    if (closeJournalSettingsBtn) {
-        closeJournalSettingsBtn.onclick = () => {
-            journalSettingsModal.style.display = 'none';
-        };
-    }
-    
-    journalSettingsModal.onclick = (e) => {
-        if (e.target === journalSettingsModal) {
-            journalSettingsModal.style.display = 'none';
-        }
-    };
-    
-    if (exportJournalBtn) {
-        exportJournalBtn.onclick = exportJournalData;
-    }
-    
-    if (importJournalBtn) {
-        importJournalBtn.onclick = () => {
-            if (!journalImportFileInput) {
-                journalImportFileInput = document.createElement('input');
-                journalImportFileInput.type = 'file';
-                journalImportFileInput.accept = '.json';
-                journalImportFileInput.addEventListener('change', importJournalData);
-            }
-            journalImportFileInput.click();
-        };
-    }
-    
-    if (clearJournalDataBtn) {
-        clearJournalDataBtn.onclick = clearAllJournalData;
-    }
+    if (closeJournalSettingsBtn) closeJournalSettingsBtn.onclick = () => { journalSettingsModal.style.display = 'none'; };
+    journalSettingsModal.onclick = (e) => { if (e.target === journalSettingsModal) journalSettingsModal.style.display = 'none'; };
+    if (exportJournalBtn) exportJournalBtn.onclick = () => { try { const dataStr = JSON.stringify(books, null, 2); const blob = new Blob([dataStr], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `元气打卡_日记备份_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); showToast('日记导出成功！'); } catch(e) { showToast('导出失败'); } };
+    if (importJournalBtn) { let fileInput = null; importJournalBtn.onclick = () => { const journalSectionEl = document.getElementById('journal-section'); const oldScrollTop = journalSectionEl ? journalSectionEl.scrollTop : 0; if (!fileInput) { fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.accept = '.json'; fileInput.addEventListener('change', (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { let content = ev.target.result; if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1); const imported = JSON.parse(content); if (!Array.isArray(imported)) throw new Error(); if (confirm(`导入日记将覆盖当前所有日记本（共 ${books.length} 本），是否继续？`)) { if (notebookView.style.display === 'block') closeNotebookDiary(); books = imported; saveBooksToLocal(); renderBookshelfUI(); if (journalSectionEl) journalSectionEl.scrollTop = oldScrollTop; if (journalSection.classList.contains('active')) { if (bookshelfView) bookshelfView.style.display = 'block'; if (notebookView) notebookView.style.display = 'none'; renderBookshelfUI(); if (journalSectionEl) journalSectionEl.scrollTop = oldScrollTop; } showToast(`日记导入成功，共 ${books.length} 本日记本`); } } catch(err) { showToast('导入失败：无效的备份文件'); } }; reader.readAsText(file, 'UTF-8'); e.target.value = ''; }); } fileInput.click(); }; }
+    if (clearJournalDataBtn) clearJournalDataBtn.onclick = () => { if (confirm('⚠️ 警告：此操作将永久删除所有日记本及日记内容，不可恢复！确定要继续吗？')) { if (notebookView.style.display === 'block') closeNotebookDiary(); books = []; localStorage.removeItem('paper_multi_books'); initDataDiary(); renderBookshelfUI(); if (journalSection.classList.contains('active')) { if (bookshelfView) bookshelfView.style.display = 'block'; if (notebookView) notebookView.style.display = 'none'; renderBookshelfUI(); } showToast('日记数据已清空，已重新创建默认日记本'); } };
 }
-
-// 绑定日记设置按钮点击事件
 const journalSettingsHeaderBtn = document.getElementById('journal-settings-btn');
-if (journalSettingsHeaderBtn) {
-    journalSettingsHeaderBtn.onclick = () => {
-        if (journalSettingsModal) journalSettingsModal.style.display = 'flex';
-    };
-}
+if (journalSettingsHeaderBtn) journalSettingsHeaderBtn.onclick = () => { const journalSettingsModal = document.getElementById('journal-settings-modal'); if (journalSettingsModal) journalSettingsModal.style.display = 'flex'; };
 
 // ================== 应用初始化 ==================
 async function initApp() {
@@ -6874,6 +6497,7 @@ async function initApp() {
           p.history = {};
         }
         if (p.forceActive === undefined) p.forceActive = false;
+        if (p.isEnded === undefined) p.isEnded = false;
         
         if (p.timerStartTime === undefined) p.timerStartTime = null;
         if (p.pauseSegments === undefined) p.pauseSegments = [];
@@ -6924,6 +6548,8 @@ async function initApp() {
     }
     
     if (hideInactivePlansCheckbox) hideInactivePlansCheckbox.checked = hideInactivePlans;
+    
+    initIsEndedField();
   } catch (e) {
     console.error('加载数据时出错:', e);
     punches = [];
@@ -6954,7 +6580,7 @@ async function initApp() {
     initYearMonthPicker();
     initCountdownInputs();
     initDatePicker();
-    initJournalModule();  // 内部已调用 initJournalSettingsModal
+    initJournalModule();
   }, 200);
 
   if (timeDatePicker) {
