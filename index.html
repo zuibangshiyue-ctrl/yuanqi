@@ -128,28 +128,18 @@
               <span class="page-number" id="pageNumDisplay">第 1 页</span>
             </div>
             <input type="text" class="diary-title" id="diaryTitle" placeholder="日记标题 · 此刻心情" autocomplete="off">
-            <textarea class="diary-content" id="diaryContent" placeholder="写下今天的故事、灵感或心事……&#10;每一页都值得珍藏。"></textarea>
-          </div>
-
-          <div class="quick-page-wrapper">
-            <div class="quick-page-container">
-              <i class="fas fa-arrows-alt-h" style="font-size:0.7rem; color:#b29a6b;"></i>
-              <input type="range" id="quickPageSlider" class="quick-page-slider" min="1" max="1" value="1" step="1">
-              <div class="quick-page-value" id="quickPageValue">1 / 1</div>
-            </div>
-            <div id="sliderBubble" class="slider-bubble">
-              <div class="bubble-line1" id="bubbleLine1">第1页 · 日期</div>
-              <div class="bubble-line2" id="bubbleLine2">标题</div>
+            <div class="diary-content-wrapper">
+              <textarea class="diary-content" id="diaryContent" placeholder="写下今天的故事、灵感或心事……&#10;每一页都值得珍藏。"></textarea>
             </div>
           </div>
 
           <div class="action-bar">
             <button class="nav-btn back-shelf-btn" id="backToShelfBtn"><i class="fas fa-arrow-left"></i></button>
-            <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-left"></i></button>
+            <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-up"></i></button>
             <button class="nav-btn" id="addPageBtn"><i class="fas fa-plus"></i></button>
             <div class="page-indicator"><i class="fas fa-book-open"></i> <span id="pageCounter">1 / 1</span></div>
             <button class="nav-btn" id="deletePageBtn"><i class="fas fa-trash-alt"></i></button>
-            <button class="nav-btn" id="nextPageBtn"><i class="fas fa-chevron-right"></i></button>
+            <button class="nav-btn" id="nextPageBtn"><i class="fas fa-chevron-down"></i></button>
           </div>
         </div>
       </div>
@@ -164,7 +154,6 @@
   <button id="nav-journal">日记</button>
 </div>
 
-<!-- 修改点：移除三个设置项的 .setting-desc 文本 -->
 <div id="settings-modal" class="settings-modal">
   <div class="modal-content">
     <div class="modal-header">
@@ -175,7 +164,6 @@
       <div class="setting-item">
         <div class="setting-info">
           <h4>隐藏非周期计划</h4>
-          <!-- 已移除描述文本 -->
         </div>
         <label class="switch">
           <input type="checkbox" id="hide-inactive-plans">
@@ -185,7 +173,6 @@
       <div class="setting-item">
         <div class="setting-info">
           <h4>数据备份</h4>
-          <!-- 已移除描述文本 -->
         </div>
         <div style="display: flex; gap: 10px;">
           <button id="export-data-btn" class="backup-btn">导出数据</button>
@@ -196,7 +183,6 @@
       <div class="setting-item">
         <div class="setting-info">
           <h4>清空所有记录</h4>
-          <!-- 已移除描述文本 -->
         </div>
         <button id="clear-all-data-btn" class="danger-btn">清空记录</button>
       </div>
@@ -717,7 +703,6 @@
   </div>
 </div>
 
-<!-- 修改点：移除日记设置中的描述文本和说明模块 -->
 <div id="journal-settings-modal" class="settings-modal">
   <div class="modal-content">
     <div class="modal-header">
@@ -728,7 +713,6 @@
       <div class="setting-item">
         <div class="setting-info">
           <h4>日记备份</h4>
-          <!-- 已移除描述文本 -->
         </div>
         <div style="display: flex; gap: 10px;">
           <button id="export-journal-data" class="backup-btn" style="background: var(--primary-color); color: white;">导出日记</button>
@@ -738,11 +722,9 @@
       <div class="setting-item">
         <div class="setting-info">
           <h4>清空日记数据</h4>
-          <!-- 已移除描述文本 -->
         </div>
         <button id="clear-journal-data-btn" class="danger-btn">清空日记数据</button>
       </div>
-      <!-- 已移除整个说明模块 -->
     </div>
   </div>
 </div>
