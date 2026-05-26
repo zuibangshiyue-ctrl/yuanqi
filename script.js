@@ -1,6 +1,6 @@
 // ================== 元气打卡 完整版 JS ==================
 // 包含：打卡计划管理、计时器、时间轴、日历、日记本（垂直滚动翻页）、数据备份、日记单独导出/导入等
-// 新增：日记页面左侧边缘右滑返回书架视图功能
+// 设置中移除了“隐藏已结束计划”功能
 
 // ---------- 全局变量 ----------
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
@@ -13,6 +13,7 @@ let recentIcons = JSON.parse(localStorage.getItem('recentIcons') || '["📋","�
 let globalTimerInterval = null;
 
 let hideInactivePlans = JSON.parse(localStorage.getItem('hideInactivePlans') || 'false');
+let hideCompletedTodayPlans = JSON.parse(localStorage.getItem('hideCompletedTodayPlans') || 'false');
 const showExpiredReminders = true;
 const autoSort = true;
 
@@ -356,6 +357,7 @@ async function prepareDataForExport() {
     punches: [],
     recentIcons: [],
     hideInactivePlans: hideInactivePlans,
+    hideCompletedTodayPlans: hideCompletedTodayPlans,
     timerSessions: timerSessions,
     cardColorMap: cardColorMap,
     books: books,
@@ -643,9 +645,16 @@ async function importBackupData(event) {
         
         punches = processedData.punches || [];
         recentIcons = processedData.recentIcons || [];
-        hideInactivePlans = processedData.hideInactivePlans || false;
+        hideInactivePlans = processedData.hideInactivePlans !== undefined ? processedData.hideInactivePlans : false;
+        hideCompletedTodayPlans = processedData.hideCompletedTodayPlans !== undefined ? processedData.hideCompletedTodayPlans : false;
         timerSessions = processedData.timerSessions || [];
         cardColorMap = processedData.cardColorMap || {};
+        
+        // 更新设置界面checkbox状态
+        const hideInactiveCheckbox = document.getElementById('hide-inactive-plans');
+        if (hideInactiveCheckbox) hideInactiveCheckbox.checked = hideInactivePlans;
+        const hideCompletedCheckbox = document.getElementById('hide-completed-today-plans');
+        if (hideCompletedCheckbox) hideCompletedCheckbox.checked = hideCompletedTodayPlans;
         
         punches.forEach(p => { if (p.isEnded === undefined) p.isEnded = false; });
         
@@ -1430,6 +1439,7 @@ function saveToLocalStorage() {
     localStorage.setItem('punches', JSON.stringify(dataToSave));
     localStorage.setItem('recentIcons', JSON.stringify(recentIcons));
     localStorage.setItem('hideInactivePlans', JSON.stringify(hideInactivePlans));
+    localStorage.setItem('hideCompletedTodayPlans', JSON.stringify(hideCompletedTodayPlans));
     localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
     localStorage.setItem('cardColorMap', JSON.stringify(cardColorMap));
   } catch (e) {
@@ -2249,7 +2259,7 @@ async function renderPunchList(forceRender = false) {
   const list = document.getElementById('punch-list');
   if (!list) return;
   
-  console.log('开始渲染卡片列表，卡片数量:', punches.length, '隐藏非周期计划:', hideInactivePlans, '强制渲染:', forceRender);
+  console.log('开始渲染卡片列表，卡片数量:', punches.length, '隐藏非周期计划:', hideInactivePlans, '隐藏今日已打卡计划:', hideCompletedTodayPlans, '编辑模式:', editMode, '强制渲染:', forceRender);
   
   if (editMode && !forceRender) {
     console.log('编辑模式下只更新按钮状态');
@@ -2272,11 +2282,17 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
+  // 收集可见卡片：编辑模式下显示所有卡片，否则按过滤规则
   const visibleCards = [];
   for (const p of punches) {
-    if (shouldShowPunch(p)) {
+    if (editMode) {
+      // 编辑模式下显示所有卡片，忽略所有隐藏规则
       visibleCards.push(p);
+      continue;
     }
+    if (!shouldShowPunch(p)) continue;
+    if (hideCompletedTodayPlans && isPunchDoneToday(p)) continue;
+    visibleCards.push(p);
   }
   
   for (const p of visibleCards) {
@@ -2690,23 +2706,37 @@ function isPunchDoneToday(p) {
 }
 
 function enterEditMode() {
+  if (editMode) return;
+  const scrollContainer = document.querySelector('#punch-section');
+  const oldScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+  
   editMode = true;
   console.log('进入编辑模式');
-
-  const punchItems = document.querySelectorAll('.punch-item');
-  punchItems.forEach(item => {
-    item.classList.add('edit-mode');
-  });
+  renderPunchList(true);
+  
+  // 恢复滚动位置
+  if (scrollContainer && oldScrollTop) {
+    requestAnimationFrame(() => {
+      scrollContainer.scrollTop = oldScrollTop;
+    });
+  }
 }
 
 function exitEditMode() {
+  if (!editMode) return;
+  const scrollContainer = document.querySelector('#punch-section');
+  const oldScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+  
   editMode = false;
   console.log('退出编辑模式');
-
-  const punchItems = document.querySelectorAll('.punch-item');
-  punchItems.forEach(item => {
-    item.classList.remove('edit-mode');
-  });
+  renderPunchList(true);
+  
+  // 恢复滚动位置
+  if (scrollContainer && oldScrollTop) {
+    requestAnimationFrame(() => {
+      scrollContainer.scrollTop = oldScrollTop;
+    });
+  }
 }
 
 document.addEventListener('click', function(e) {
@@ -5352,10 +5382,12 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings');
 const hideInactivePlansCheckbox = document.getElementById('hide-inactive-plans');
+const hideCompletedTodayPlansCheckbox = document.getElementById('hide-completed-today-plans');
 
 if (settingsBtn) {
   settingsBtn.onclick = () => {
     if (hideInactivePlansCheckbox) hideInactivePlansCheckbox.checked = hideInactivePlans;
+    if (hideCompletedTodayPlansCheckbox) hideCompletedTodayPlansCheckbox.checked = hideCompletedTodayPlans;
     if (settingsModal) settingsModal.style.display = 'flex';
   };
 }
@@ -5374,13 +5406,22 @@ if (settingsModal) {
 }
 
 function autoSaveSettings() {
-  const newHideInactive = hideInactivePlansCheckbox.checked;
   let needRefresh = false;
+  
+  const newHideInactive = hideInactivePlansCheckbox.checked;
   if (newHideInactive !== hideInactivePlans) {
     hideInactivePlans = newHideInactive;
     localStorage.setItem('hideInactivePlans', JSON.stringify(hideInactivePlans));
     needRefresh = true;
   }
+  
+  const newHideCompletedToday = hideCompletedTodayPlansCheckbox.checked;
+  if (newHideCompletedToday !== hideCompletedTodayPlans) {
+    hideCompletedTodayPlans = newHideCompletedToday;
+    localStorage.setItem('hideCompletedTodayPlans', JSON.stringify(hideCompletedTodayPlans));
+    needRefresh = true;
+  }
+  
   if (needRefresh) {
     saveAndRender();
     if (timeSection && timeSection.classList.contains('active')) {
@@ -5394,6 +5435,9 @@ function autoSaveSettings() {
 
 if (hideInactivePlansCheckbox) {
   hideInactivePlansCheckbox.addEventListener('change', autoSaveSettings);
+}
+if (hideCompletedTodayPlansCheckbox) {
+  hideCompletedTodayPlansCheckbox.addEventListener('change', autoSaveSettings);
 }
 
 if (closeEditTimerBtn) {
@@ -6547,7 +6591,12 @@ async function initApp() {
       cardColorMap = JSON.parse(storedColorMap);
     }
     
+    // 读取新设置
+    const storedHideCompleted = localStorage.getItem('hideCompletedTodayPlans');
+    if (storedHideCompleted !== null) hideCompletedTodayPlans = JSON.parse(storedHideCompleted);
+    
     if (hideInactivePlansCheckbox) hideInactivePlansCheckbox.checked = hideInactivePlans;
+    if (hideCompletedTodayPlansCheckbox) hideCompletedTodayPlansCheckbox.checked = hideCompletedTodayPlans;
     
     initIsEndedField();
   } catch (e) {
