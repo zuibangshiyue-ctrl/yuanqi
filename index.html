@@ -133,7 +133,7 @@
             </div>
           </div>
 
-          <div class="action-bar">
+          <div class="action-bar" id="originalActionBar">
             <button class="nav-btn back-shelf-btn" id="backToShelfBtn"><i class="fas fa-arrow-left"></i></button>
             <button class="nav-btn" id="prevPageBtn"><i class="fas fa-chevron-up"></i></button>
             <button class="nav-btn" id="addPageBtn"><i class="fas fa-plus"></i></button>
@@ -170,7 +170,6 @@
           <span class="slider"></span>
         </label>
       </div>
-      <!-- 移除了“隐藏已结束计划”的选项 -->
       <div class="setting-item">
         <div class="setting-info">
           <h4>隐藏今日已打卡计划</h4>
@@ -725,8 +724,9 @@
         <div class="setting-info">
           <h4>日记备份</h4>
         </div>
+        <!-- 修改点：移除了导出日记按钮的内联样式，使其与导入日记样式一致 -->
         <div style="display: flex; gap: 10px;">
-          <button id="export-journal-data" class="backup-btn" style="background: var(--primary-color); color: white;">导出日记</button>
+          <button id="export-journal-data" class="backup-btn">导出日记</button>
           <button id="import-journal-data" class="backup-btn">导入日记</button>
         </div>
       </div>
@@ -736,6 +736,19 @@
         </div>
         <button id="clear-journal-data-btn" class="danger-btn">清空日记数据</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 日记目录模态框 -->
+<div id="diary-outline-modal" class="settings-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3> 目录</h3>
+      <button id="close-outline-modal" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <ul id="outline-list" style="list-style: none; padding: 0; margin: 0;"></ul>
     </div>
   </div>
 </div>
