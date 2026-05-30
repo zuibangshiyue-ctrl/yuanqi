@@ -3320,6 +3320,7 @@ body.edit-mode-active #journal-section .book-card .edit-book-btn {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   touch-action: pan-y;
+  padding-bottom: calc(64px + var(--navbar-height) + 12px); /* 为悬浮按钮留出空间 */
 }
 
 .diary-page-item {
@@ -3554,4 +3555,179 @@ input, textarea, [contenteditable="true"] {
 .header-delete-btn:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: scale(1.05);
+}
+
+/* 新增：日记悬浮操作栏样式 */
+.fixed-action-bar {
+  position: fixed;
+  bottom: var(--navbar-height);
+  left: 0;
+  right: 0;
+  background: rgba(255, 254, 247, 0.96);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  z-index: 101;
+  transform: translateZ(0);
+  transition: transform 0.2s ease;
+  padding: 8px 12px;
+  border-radius: 32px 32px 0 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  animation: slideUpBar 0.25s ease-out;
+}
+
+@keyframes slideUpBar {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.fixed-action-bar .nav-btn {
+  background: #f6f0e2;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 60px;
+  font-weight: 500;
+  font-size: 14px;
+  color: #7f6942;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.fixed-action-bar .nav-btn i {
+  font-size: 16px;
+}
+.fixed-action-bar .nav-btn:active {
+  transform: scale(0.96);
+}
+.fixed-action-bar .page-indicator {
+  background: #fff9ef;
+  padding: 6px 14px;
+  border-radius: 40px;
+  font-size: 13px;
+  color: #ad8f60;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .fixed-action-bar {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .fixed-action-bar .nav-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .fixed-action-bar .nav-btn i {
+    font-size: 14px;
+  }
+  .fixed-action-bar .page-indicator {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+}
+
+/* 目录列表样式 */
+#outline-list li {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#outline-list li:hover {
+  background: rgba(255,127,80,0.08);
+}
+#outline-list li.active {
+  background: rgba(255,127,80,0.15);
+  border-left: 3px solid var(--primary-color);
+}
+#outline-list .page-number {
+  font-size: 0.75rem;
+  color: #b29a6b;
+  min-width: 2.5rem;
+}
+#outline-list .page-title {
+  flex: 1;
+  font-weight: 500;
+  color: #4c3b24;
+}
+
+/* ========== 日记设置和目录模态框 - 暖色调适配 ========== */
+#journal-settings-modal .modal-header,
+#diary-outline-modal .modal-header {
+  background: #f8f1e2;  /* 暖米色背景，替代橙色渐变 */
+  border-bottom: 1px solid #e8d9c4;
+}
+#journal-settings-modal .modal-header h3,
+#diary-outline-modal .modal-header h3 {
+  color: #7b5a3b;  /* 深暖棕 */
+  font-weight: 600;
+}
+#journal-settings-modal .close-btn,
+#diary-outline-modal .close-btn {
+  background: rgba(123, 90, 59, 0.15);
+  color: #7b5a3b;
+}
+#journal-settings-modal .close-btn:hover,
+#diary-outline-modal .close-btn:hover {
+  background: rgba(123, 90, 59, 0.25);
+  transform: rotate(90deg);
+}
+#journal-settings-modal .setting-info h4,
+#diary-outline-modal .setting-info h4 {
+  color: #5d3e24;
+}
+#journal-settings-modal .setting-desc {
+  color: #b87c4f;
+}
+#journal-settings-modal .backup-btn {
+  border-color: #c9aa7b;
+  color: #7b5a3b;
+  background: #fffcf7;
+}
+#journal-settings-modal .backup-btn:hover {
+  background: #c9aa7b;
+  color: white;
+  border-color: #c9aa7b;
+}
+#journal-settings-modal .danger-btn {
+  border-color: #c47a6a;
+  color: #b45a4a;
+  background: #fff7f5;
+}
+#journal-settings-modal .danger-btn:hover {
+  background: #c47a6a;
+  color: white;
+}
+/* 目录模态框专用样式 */
+#diary-outline-modal .modal-body {
+  background: #fefcf8;
+}
+#outline-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  border-radius: 20px;
+}
+#outline-list li {
+  border-bottom-color: #f0e5cf;
+}
+#outline-list li:hover {
+  background: #fdf4e6;
+}
+#outline-list li.active {
+  background: #f7ebd4;
+  border-left-color: #c9aa7b;
+}
+#outline-list .page-number {
+  color: #b97f52;
+}
+#outline-list .page-title {
+  color: #5d3e24;
 }
