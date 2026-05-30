@@ -1,6 +1,8 @@
 // ================== 元气打卡 完整版 JS ==================
 // 包含：打卡计划管理、计时器、时间轴、日历、日记本（垂直滚动翻页）、数据备份、日记单独导出/导入等
 // 设置中移除了“隐藏已结束计划”功能
+// 新增：点击顶部状态栏区域滚动到页面顶部；点击当前激活的底部导航按钮滚动到页面底部
+// 2025-03-09 修改：滚动到顶部触发区域从整个header缩小为仅“今日剩余时间”区域
 
 // ---------- 全局变量 ----------
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
@@ -1595,23 +1597,179 @@ function isNthWeekdayOfMonth(date, weekNumber, targetWeekday) {
   }
 }
 
+// ================== shouldShowPunch ==================
 function shouldShowPunch(p) {
-  if (p.isEnded === true) return true;
-  
-  if (!hideInactivePlans) {
-    return true;
-  }
-  
+  if (editMode) return true;
+  if (!hideInactivePlans) return true;
+  if (p.isEnded === true) return false;
   const inPeriod = isInCurrentPeriod(p);
-  if (!inPeriod) {
-    return false;
-  }
-  
-  if (p.frequency === 'once' && !hasAnyCompletedCheckForOnce(p)) {
+  if (!inPeriod) return false;
+  return true;
+}
+
+// ================== 新增：判断计划在指定日期是否有效（用于日历统计） ==================
+/**
+ * 判断计划在指定日期是否处于有效周期内（是否应该计入当天的打卡任务）
+ * @param {Object} punch 计划对象
+ * @param {string} dateStr YYYY-MM-DD 格式的日期字符串
+ * @returns {boolean}
+ */
+function isPlanActiveOnDate(punch, dateStr) {
+  if (punch.isEnded === true) return false;
+
+  const date = new Date(dateStr + 'T00:00:00');
+  const dayOfWeek = date.getDay();           // 0周日 ~ 6周六
+  const dayOfMonth = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  if (punch.frequency === 'once') {
+    if (punch.forceActive === true) return true;
+    if (hasAnyCompletedCheckForOnce(punch)) return false;
     return true;
   }
-  
+
+  if (punch.frequency === 'daily') return true;
+
+  if (punch.frequency === 'weekly') {
+    if (punch.days && punch.days.length > 0) {
+      return punch.days.includes(dayOfWeek);
+    }
+    return true;
+  }
+
+  if (punch.frequency === 'monthly') {
+    return dayOfMonth === 1;
+  }
+
+  if (punch.frequency === 'yearly') {
+    return month === 1 && dayOfMonth === 1;
+  }
+
+  if (punch.frequency === 'custom') {
+    return isInCustomPeriodForDate(punch, date);
+  }
+
   return true;
+}
+
+function isInCustomPeriodForDate(punch, date) {
+  if (!punch.customInterval || !punch.customUnit) return true;
+
+  const todayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayTimestamp = todayStart.getTime();
+
+  let startDate;
+  if (punch.lastCheckDate) {
+    startDate = new Date(punch.lastCheckDate);
+  } else if (punch.createdDate) {
+    startDate = new Date(punch.createdDate);
+  } else {
+    const firstCheckDate = punch.history && Object.keys(punch.history)
+      .sort()
+      .find(dateStr => {
+        const record = punch.history[dateStr];
+        if (punch.dailyTimes && punch.dailyTimes > 1) {
+          return record.punches >= record.maxPunches;
+        } else if (punch.dailyTimes === 0) {
+          return false;
+        } else {
+          return record.checked === true;
+        }
+      });
+    if (firstCheckDate) {
+      startDate = new Date(firstCheckDate + 'T00:00:00');
+    } else {
+      startDate = todayStart;
+    }
+  }
+
+  startDate.setHours(0, 0, 0, 0);
+  const startTimestamp = startDate.getTime();
+  const daysDiff = Math.floor((todayTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
+
+  switch (punch.customUnit) {
+    case 'days':
+      return daysDiff % punch.customInterval === 0;
+    case 'weeks':
+      if (!punch.customWeekdays || punch.customWeekdays.length === 0) {
+        return daysDiff % (punch.customInterval * 7) === 0;
+      }
+      if (!punch.customWeekdays.includes(date.getDay())) return false;
+      const weeksDiff = Math.floor(daysDiff / 7);
+      return weeksDiff % punch.customInterval === 0;
+    case 'months':
+      const monthsDiff = (date.getFullYear() - startDate.getFullYear()) * 12 +
+                         (date.getMonth() - startDate.getMonth());
+      if (monthsDiff % punch.customInterval !== 0) return false;
+      if (punch.customMonthDayType === 'day') {
+        return date.getDate() === punch.customDayOfMonth;
+      } else {
+        return isNthWeekdayOfMonth(date, punch.customWeekNumber, punch.customWeekday);
+      }
+    case 'years':
+      const yearsDiff = date.getFullYear() - startDate.getFullYear();
+      if (yearsDiff % punch.customInterval !== 0) return false;
+      return date.getMonth() + 1 === punch.customMonthOfYear &&
+             date.getDate() === punch.customDayOfYear;
+    default:
+      return true;
+  }
+}
+
+// ================== 修改：getDayPunchData 仅统计有效周期内的计划 ==================
+function getDayPunchData(dateString) {
+  let totalPlans = 0;
+  let completedPlans = 0;
+  const dayPunchItems = [];
+
+  punches.forEach(punch => {
+    // 关键修改：仅当该计划在指定日期处于有效周期内时才计入统计
+    if (!isPlanActiveOnDate(punch, dateString)) {
+      return; // 跳过不计入
+    }
+
+    const dayRecord = punch.history && punch.history[dateString];
+    if (dayRecord) {
+      if (punch.dailyTimes === 0) {
+        return;
+      }
+      
+      totalPlans++;
+
+      let isCompleted = false;
+      if (punch.dailyTimes && punch.dailyTimes > 1) {
+        const maxPunches = dayRecord.maxPunches || punch.dailyTimes || 1;
+        isCompleted = (dayRecord.punches || 0) >= maxPunches;
+      } else {
+        isCompleted = dayRecord.checked === true;
+      }
+
+      if (isCompleted) {
+        completedPlans++;
+      }
+
+      dayPunchItems.push({
+        name: punch.name,
+        icon: punch.icon,
+        isCompleted: isCompleted,
+        punches: dayRecord.punches || 0,
+        maxPunches: dayRecord.maxPunches || punch.dailyTimes || 1,
+        isTimed: dayRecord.isTimed || false,
+        checkedTime: dayRecord.checkedTime,
+        dailyTimes: punch.dailyTimes || 1,
+        frequency: punch.frequency || 'daily',
+        punch: punch
+      });
+    }
+  });
+
+  return {
+    totalPlans,
+    completedPlans,
+    completionRate: totalPlans > 0 ? (completedPlans / totalPlans) * 100 : 0,
+    dayPunchItems
+  };
 }
 
 let dragStartX = 0, dragStartY = 0, dragStartElement = null, dragStartIndex = -1, isDraggingCard = false;
@@ -2282,11 +2440,9 @@ async function renderPunchList(forceRender = false) {
     initPunchHistory(p);
   });
   
-  // 收集可见卡片：编辑模式下显示所有卡片，否则按过滤规则
   const visibleCards = [];
   for (const p of punches) {
     if (editMode) {
-      // 编辑模式下显示所有卡片，忽略所有隐藏规则
       visibleCards.push(p);
       continue;
     }
@@ -2714,7 +2870,6 @@ function enterEditMode() {
   console.log('进入编辑模式');
   renderPunchList(true);
   
-  // 恢复滚动位置
   if (scrollContainer && oldScrollTop) {
     requestAnimationFrame(() => {
       scrollContainer.scrollTop = oldScrollTop;
@@ -2731,7 +2886,6 @@ function exitEditMode() {
   console.log('退出编辑模式');
   renderPunchList(true);
   
-  // 恢复滚动位置
   if (scrollContainer && oldScrollTop) {
     requestAnimationFrame(() => {
       scrollContainer.scrollTop = oldScrollTop;
@@ -3854,56 +4008,6 @@ function createCalendarDay(date, isOtherMonth, today) {
   };
 
   calendarGrid.appendChild(dayElement);
-}
-
-function getDayPunchData(dateString) {
-  let totalPlans = 0;
-  let completedPlans = 0;
-  const dayPunchItems = [];
-
-  punches.forEach(punch => {
-    const dayRecord = punch.history && punch.history[dateString];
-
-    if (dayRecord) {
-      if (punch.dailyTimes === 0) {
-        return;
-      }
-      
-      totalPlans++;
-
-      let isCompleted = false;
-      if (punch.dailyTimes && punch.dailyTimes > 1) {
-        const maxPunches = dayRecord.maxPunches || punch.dailyTimes || 1;
-        isCompleted = (dayRecord.punches || 0) >= maxPunches;
-      } else {
-        isCompleted = dayRecord.checked === true;
-      }
-
-      if (isCompleted) {
-        completedPlans++;
-      }
-
-      dayPunchItems.push({
-        name: punch.name,
-        icon: punch.icon,
-        isCompleted: isCompleted,
-        punches: dayRecord.punches || 0,
-        maxPunches: dayRecord.maxPunches || punch.dailyTimes || 1,
-        isTimed: dayRecord.isTimed || false,
-        checkedTime: dayRecord.checkedTime,
-        dailyTimes: punch.dailyTimes || 1,
-        frequency: punch.frequency || 'daily',
-        punch: punch
-      });
-    }
-  });
-
-  return {
-    totalPlans,
-    completedPlans,
-    completionRate: totalPlans > 0 ? (completedPlans / totalPlans) * 100 : 0,
-    dayPunchItems
-  };
 }
 
 async function showDayDetails(date, dateString, dayData) {
@@ -5553,6 +5657,9 @@ remainingTimer = setInterval(updateRemainingTime, 1000);
 
 if (navTime) {
   navTime.onclick = () => {
+    if (notebookView && notebookView.style.display === 'block') {
+        if (typeof closeNotebookDiary === 'function') closeNotebookDiary();
+    }
     currentTimeViewDate = new Date();
     updateTimeHeader();
     
@@ -5614,6 +5721,9 @@ function updateHeaderButtons() {
 }
 
 if (navPunch) navPunch.onclick = () => {
+  if (notebookView && notebookView.style.display === 'block') {
+      if (typeof closeNotebookDiary === 'function') closeNotebookDiary();
+  }
   punchSection.classList.add('active');
   timeSection.classList.remove('active');
   calendarSection.classList.remove('active');
@@ -5626,6 +5736,9 @@ if (navPunch) navPunch.onclick = () => {
 };
 
 if (navCalendar) navCalendar.onclick = () => {
+  if (notebookView && notebookView.style.display === 'block') {
+      if (typeof closeNotebookDiary === 'function') closeNotebookDiary();
+  }
   punchSection.classList.remove('active');
   timeSection.classList.remove('active');
   calendarSection.classList.add('active');
@@ -5932,7 +6045,7 @@ if (tomatoModal) {
   };
 }
 
-// ================== 日记模块 - 全新垂直滚动实现 ==================
+// ================== 日记模块 - 全新垂直滚动实现，悬浮操作栏 ==================
 let books = [];
 let activeBookId = null;
 let activeBook = null;
@@ -5995,6 +6108,54 @@ function syncActiveBookToBooks() {
 let currentVerticalScrollContainer = null;
 let savedBookshelfScrollTop = 0;   // 新增：存储书架视图滚动位置
 
+// 悬浮操作栏相关变量
+let floatingActionBar = null;
+
+function createFloatingActionBar() {
+    if (floatingActionBar) {
+        floatingActionBar.remove();
+        floatingActionBar = null;
+    }
+    const bar = document.createElement('div');
+    bar.className = 'fixed-action-bar';
+    bar.innerHTML = `
+        <button class="nav-btn back-shelf-btn" id="floatingBackBtn"><i class="fas fa-arrow-left"></i></button>
+        <button class="nav-btn" id="floatingPrevBtn"><i class="fas fa-chevron-up"></i></button>
+        <button class="nav-btn" id="floatingAddBtn"><i class="fas fa-plus"></i></button>
+        <div class="page-indicator"><i class="fas fa-book-open"></i> <span id="floatingPageCounter">1 / 1</span></div>
+        <button class="nav-btn" id="floatingDeleteBtn"><i class="fas fa-trash-alt"></i></button>
+        <button class="nav-btn" id="floatingNextBtn"><i class="fas fa-chevron-down"></i></button>
+        <button class="nav-btn" id="floatingOutlineBtn"><i class="fas fa-list-ul"></i></button>
+    `;
+    document.body.appendChild(bar);
+    floatingActionBar = bar;
+    
+    document.getElementById('floatingBackBtn').onclick = () => closeNotebookDiary();
+    document.getElementById('floatingPrevBtn').onclick = () => prevPageDiary();
+    document.getElementById('floatingNextBtn').onclick = () => nextPageDiary();
+    document.getElementById('floatingAddBtn').onclick = () => addNewDiaryPage();
+    document.getElementById('floatingDeleteBtn').onclick = () => deleteCurrentPage();
+    document.getElementById('floatingOutlineBtn').onclick = () => showDiaryOutline();
+}
+
+function updateFloatingPageCounter() {
+    if (!floatingActionBar) return;
+    const counterSpan = floatingActionBar.querySelector('#floatingPageCounter');
+    if (counterSpan && activeBook) {
+        counterSpan.innerText = `${activeBook.pages.length} 页`;
+    }
+}
+
+function hideOriginalActionBar() {
+    const originalBar = document.getElementById('originalActionBar');
+    if (originalBar) originalBar.style.display = 'none';
+}
+
+function showOriginalActionBar() {
+    const originalBar = document.getElementById('originalActionBar');
+    if (originalBar) originalBar.style.display = '';
+}
+
 function renderVerticalPages() {
     if (!activeBook || !notebookView) return;
     
@@ -6045,6 +6206,7 @@ function renderVerticalPages() {
                     syncActiveBookToBooks();
                     const dateSpan = pageDiv.querySelector('.diary-page-date');
                     if (dateSpan) dateSpan.textContent = formatShortDate(activeBook.pages[idx].updatedAt);
+                    updateFloatingPageCounter();
                 }
             }, 300);
         };
@@ -6065,11 +6227,12 @@ function renderVerticalPages() {
     if (notebookDiv) {
         const oldPageCard = notebookDiv.querySelector('.page-card');
         if (oldPageCard) oldPageCard.style.display = 'none';
-        notebookDiv.insertBefore(scrollContainer, notebookDiv.querySelector('.action-bar'));
+        notebookDiv.insertBefore(scrollContainer, notebookDiv.querySelector('#originalActionBar') || notebookDiv.querySelector('.action-bar'));
         currentVerticalScrollContainer = scrollContainer;
         
         const updateCounter = () => {
             if (pageCounterSpan) pageCounterSpan.innerText = `${activeBook.pages.length} 页`;
+            updateFloatingPageCounter();
         };
         updateCounter();
         
@@ -6102,7 +6265,6 @@ function renderVerticalPages() {
     }
 }
 
-// 边缘滑动手势相关变量
 let notebookSwipeListenerEnabled = false;
 let notebookSwipeStartX = 0, notebookSwipeStartY = 0;
 let notebookSwipeTriggered = false;
@@ -6121,17 +6283,13 @@ function disableNotebookSwipeToClose() {
     document.removeEventListener('touchstart', onNotebookSwipeStart);
     document.removeEventListener('touchmove', onNotebookSwipeMove);
     document.removeEventListener('touchend', onNotebookSwipeEnd);
-    // 重置状态
     notebookSwipeTriggered = false;
 }
 
 function onNotebookSwipeStart(e) {
-    // 仅在笔记本视图可见时启用
     if (!notebookView || notebookView.style.display !== 'block') return;
-    // 检查触摸点是否在左边缘（屏幕左侧 30px 内）
     const clientX = e.touches[0].clientX;
     if (clientX > 30) return;
-    // 检查触摸目标是否为可编辑元素（避免干扰文本输入）
     const target = e.target;
     const isEditable = target.isContentEditable || 
                        target.tagName === 'INPUT' || 
@@ -6151,12 +6309,11 @@ function onNotebookSwipeMove(e) {
     const deltaX = clientX - notebookSwipeStartX;
     const deltaY = clientY - notebookSwipeStartY;
     
-    // 向右滑动且水平位移大于垂直位移的1.5倍，且超过30px阈值
     if (deltaX > 30 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && !notebookSwipeTriggered) {
         e.preventDefault();
         e.stopPropagation();
         notebookSwipeTriggered = true;
-        closeNotebookDiary();  // 触发返回书架视图
+        closeNotebookDiary();
     }
 }
 
@@ -6166,10 +6323,8 @@ function onNotebookSwipeEnd() {
     notebookSwipeTriggered = false;
 }
 
-// 打开日记本：保存书架滚动位置，启用滑动手势
 function openBookDiary(bookId) {
     if (isJournalEditMode) return;
-    // 保存当前书架视图的滚动位置
     const journalSection = document.getElementById('journal-section');
     if (journalSection) {
         savedBookshelfScrollTop = journalSection.scrollTop;
@@ -6187,13 +6342,15 @@ function openBookDiary(bookId) {
     bookshelfView.style.display = 'none';
     notebookView.style.display = 'block';
     
+    hideOriginalActionBar();
+    createFloatingActionBar();
+    
     renderVerticalPages();
-    enableNotebookSwipeToClose();  // 启用边缘滑动手势
+    enableNotebookSwipeToClose();
     
     if (!cleanupBodyScroll) cleanupBodyScroll = preventBodyScrollOnDiary();
 }
 
-// 关闭日记本：恢复书架滚动位置，禁用滑动手势
 function closeNotebookDiary() {
     if (activeBook) {
         if (currentVerticalScrollContainer) {
@@ -6218,11 +6375,16 @@ function closeNotebookDiary() {
     if (oldPageCard) oldPageCard.style.display = '';
     if (cleanupBodyScroll) { cleanupBodyScroll(); cleanupBodyScroll = null; }
     
-    disableNotebookSwipeToClose();  // 禁用边缘滑动手势
+    disableNotebookSwipeToClose();
     
-    renderBookshelfUI();  // 重新渲染书架视图
+    if (floatingActionBar) {
+        floatingActionBar.remove();
+        floatingActionBar = null;
+    }
+    showOriginalActionBar();
     
-    // 恢复之前保存的滚动位置
+    renderBookshelfUI();
+    
     const journalSection = document.getElementById('journal-section');
     if (journalSection && savedBookshelfScrollTop !== undefined) {
         setTimeout(() => {
@@ -6240,6 +6402,7 @@ function addNewDiaryPage() {
     activeBook.currentPageIndex = activeBook.pages.length - 1;
     syncActiveBookToBooks();
     renderVerticalPages();
+    updateFloatingPageCounter();
     if (currentVerticalScrollContainer) {
         setTimeout(() => {
             currentVerticalScrollContainer.scrollTo({ top: currentVerticalScrollContainer.scrollHeight, behavior: 'smooth' });
@@ -6257,6 +6420,7 @@ function deleteCurrentPage() {
             activeBook.pages[0].updatedAt = new Date().toISOString();
             syncActiveBookToBooks();
             renderVerticalPages();
+            updateFloatingPageCounter();
         }
         return;
     }
@@ -6267,6 +6431,7 @@ function deleteCurrentPage() {
     activeBook.currentPageIndex = newIdx;
     syncActiveBookToBooks();
     renderVerticalPages();
+    updateFloatingPageCounter();
     if (currentVerticalScrollContainer && currentVerticalScrollContainer.children[newIdx]) {
         currentVerticalScrollContainer.children[newIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -6280,7 +6445,7 @@ function prevPageDiary() {
         activeBook.currentPageIndex = newIdx;
         syncActiveBookToBooks();
     } else {
-        pageCard.style.transform = "translateX(-2px)";
+        if (pageCard) pageCard.style.transform = "translateX(-2px)";
         setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120);
     }
 }
@@ -6293,7 +6458,7 @@ function nextPageDiary() {
         activeBook.currentPageIndex = newIdx;
         syncActiveBookToBooks();
     } else {
-        pageCard.style.transform = "translateX(2px)";
+        if (pageCard) pageCard.style.transform = "translateX(2px)";
         setTimeout(() => { if(pageCard) pageCard.style.transform = ""; }, 120);
     }
 }
@@ -6523,6 +6688,174 @@ function initJournalSettingsModal() {
 const journalSettingsHeaderBtn = document.getElementById('journal-settings-btn');
 if (journalSettingsHeaderBtn) journalSettingsHeaderBtn.onclick = () => { const journalSettingsModal = document.getElementById('journal-settings-modal'); if (journalSettingsModal) journalSettingsModal.style.display = 'flex'; };
 
+// ================== 目录功能 ==================
+const diaryOutlineModal = document.getElementById('diary-outline-modal');
+const closeOutlineModalBtn = document.getElementById('close-outline-modal');
+const outlineListEl = document.getElementById('outline-list');
+
+function closeOutlineModal() {
+    if (diaryOutlineModal) diaryOutlineModal.style.display = 'none';
+}
+
+function showDiaryOutline() {
+    if (!activeBook || !activeBook.pages || activeBook.pages.length === 0) {
+        showToast("当前日记本没有页面");
+        return;
+    }
+    if (!outlineListEl) return;
+    outlineListEl.innerHTML = '';
+    activeBook.pages.forEach((page, idx) => {
+        const li = document.createElement('li');
+        li.className = 'outline-item';
+        if (idx === activeBook.currentPageIndex) li.classList.add('active');
+        const pageNumberSpan = document.createElement('span');
+        pageNumberSpan.className = 'page-number';
+        pageNumberSpan.textContent = `#${idx+1}`;
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'page-title';
+        titleSpan.textContent = page.title || '无题';
+        li.appendChild(pageNumberSpan);
+        li.appendChild(titleSpan);
+        li.addEventListener('click', (e) => {
+            e.stopPropagation();
+            scrollToPage(idx);
+            closeOutlineModal();
+        });
+        outlineListEl.appendChild(li);
+    });
+    if (diaryOutlineModal) diaryOutlineModal.style.display = 'flex';
+}
+
+function scrollToPage(pageIndex) {
+    if (!currentVerticalScrollContainer) return;
+    const targetChild = currentVerticalScrollContainer.children[pageIndex];
+    if (targetChild) {
+        targetChild.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (activeBook) {
+            activeBook.currentPageIndex = pageIndex;
+            syncActiveBookToBooks();
+        }
+    } else {
+        showToast("无法跳转到该页面");
+    }
+}
+
+if (closeOutlineModalBtn) closeOutlineModalBtn.onclick = closeOutlineModal;
+if (diaryOutlineModal) diaryOutlineModal.onclick = (e) => { if (e.target === diaryOutlineModal) closeOutlineModal(); };
+
+// ================== 新增滚动顶部/底部功能 ==================
+function getCurrentScrollContainer() {
+    if (journalSection && journalSection.classList.contains('active') && notebookView && notebookView.style.display === 'block') {
+        const container = document.querySelector('.diary-vertical-scroll');
+        if (container) return container;
+        return notebookView;
+    }
+    if (punchSection && punchSection.classList.contains('active')) return punchSection;
+    if (timeSection && timeSection.classList.contains('active')) return timeSection;
+    if (calendarSection && calendarSection.classList.contains('active')) return calendarSection;
+    if (journalSection && journalSection.classList.contains('active')) return journalSection;
+    return null;
+}
+
+function scrollToTopCurrent(smooth = true) {
+    const container = getCurrentScrollContainer();
+    if (!container) return;
+    container.scrollTo({
+        top: 0,
+        behavior: smooth ? 'smooth' : 'auto'
+    });
+}
+
+function scrollToBottomCurrent(smooth = true) {
+    const container = getCurrentScrollContainer();
+    if (!container) return;
+    const maxScroll = container.scrollHeight - container.clientHeight;
+    container.scrollTo({
+        top: maxScroll,
+        behavior: smooth ? 'smooth' : 'auto'
+    });
+}
+
+const headerElement = document.getElementById('header');
+if (headerElement) {
+    headerElement.addEventListener('click', (e) => {
+        if (!e.target.closest('#remaining-time')) return;
+        if (e.target.closest('button')) return;
+        if (newPlanPage && newPlanPage.style.display === 'flex') return;
+        if (settingsModal && settingsModal.style.display === 'flex') return;
+        if (backupModal && backupModal.style.display === 'flex') return;
+        if (editTimerModal && editTimerModal.style.display === 'flex') return;
+        if (addTimerModal && addTimerModal.style.display === 'flex') return;
+        if (yearMonthPickerModal && yearMonthPickerModal.style.display === 'flex') return;
+        if (datePickerModal && datePickerModal.style.display === 'flex') return;
+        if (diaryOutlineModal && diaryOutlineModal.style.display === 'flex') return;
+        scrollToTopCurrent(true);
+    });
+}
+
+function enhanceNavButton(button, sectionActiveCheck, originalHandler) {
+    if (!button) return;
+    const wrappedHandler = (e) => {
+        const isActive = sectionActiveCheck();
+        if (isActive) {
+            if (newPlanPage && newPlanPage.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (settingsModal && settingsModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (backupModal && backupModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (editTimerModal && editTimerModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (addTimerModal && addTimerModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (yearMonthPickerModal && yearMonthPickerModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (datePickerModal && datePickerModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            if (diaryOutlineModal && diaryOutlineModal.style.display === 'flex') {
+                if (originalHandler) originalHandler(e);
+                return;
+            }
+            scrollToBottomCurrent(true);
+            e.stopPropagation();
+            return;
+        }
+        if (originalHandler) originalHandler(e);
+    };
+    button.onclick = wrappedHandler;
+}
+
+function setupScrollFeatures() {
+    const punchOriginal = navPunch.onclick;
+    const timeOriginal = navTime.onclick;
+    const calendarOriginal = navCalendar.onclick;
+    const journalOriginal = navJournal.onclick;
+
+    const isPunchActive = () => punchSection && punchSection.classList.contains('active');
+    const isTimeActive = () => timeSection && timeSection.classList.contains('active');
+    const isCalendarActive = () => calendarSection && calendarSection.classList.contains('active');
+    const isJournalActive = () => journalSection && journalSection.classList.contains('active');
+
+    enhanceNavButton(navPunch, isPunchActive, punchOriginal);
+    enhanceNavButton(navTime, isTimeActive, timeOriginal);
+    enhanceNavButton(navCalendar, isCalendarActive, calendarOriginal);
+    enhanceNavButton(navJournal, isJournalActive, journalOriginal);
+}
+
 // ================== 应用初始化 ==================
 async function initApp() {
   try {
@@ -6591,7 +6924,6 @@ async function initApp() {
       cardColorMap = JSON.parse(storedColorMap);
     }
     
-    // 读取新设置
     const storedHideCompleted = localStorage.getItem('hideCompletedTodayPlans');
     if (storedHideCompleted !== null) hideCompletedTodayPlans = JSON.parse(storedHideCompleted);
     
@@ -6630,6 +6962,7 @@ async function initApp() {
     initCountdownInputs();
     initDatePicker();
     initJournalModule();
+    setupScrollFeatures();
   }, 200);
 
   if (timeDatePicker) {
