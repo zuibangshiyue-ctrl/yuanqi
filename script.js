@@ -3,6 +3,8 @@
 // 设置中移除了“隐藏已结束计划”功能
 // 新增：点击顶部状态栏区域滚动到页面顶部；点击当前激活的底部导航按钮滚动到页面底部
 // 2025-03-09 修改：滚动到顶部触发区域从整个header缩小为仅“今日剩余时间”区域
+// 2026-06-09 修复：暂停后直接结束计时，暂停时段不再被计入活动时长
+// 2026-06-09 修复：自定义周期“每X天”重复计划，未打卡时持续可打卡，打卡后按打卡日推算下一周期
 
 // ---------- 全局变量 ----------
 let punches = JSON.parse(localStorage.getItem('punches') || '[]');
@@ -478,6 +480,8 @@ async function processImportedData(backupData) {
     }
   }
   
+  // 迁移 lastPunchDate 字段
+  migrateCustomDaysLastPunchDate();
   return backupData;
 }
 
@@ -1184,6 +1188,8 @@ async function completeTimerPunch(p, options = {}) {
     if (p.frequency === 'once' && p.forceActive === true) {
       p.forceActive = false;
     }
+    // 更新自定义周期 lastPunchDate
+    await updateCustomDaysLastPunchDate(p, today);
   } else {
     p.timer = null;
     p.timerStatus = 'init';
@@ -1199,21 +1205,32 @@ async function completeTimerPunch(p, options = {}) {
   return true;
 }
 
+// ================== 修复关键：buildAndSaveSegmentsFromTimer ==================
 function buildAndSaveSegmentsFromTimer(punch) {
   if (!punch.timerStartTime) {
     console.warn('buildAndSaveSegmentsFromTimer: timerStartTime 为空');
     return null;
   }
-  
+
+  // 若当前处于暂停状态，先补录暂停段，确保排除暂停时长
+  if (punch.timerStatus === 'paused' && punch.pauseStartTime) {
+    const now = Date.now();
+    punch.pauseSegments.push({
+      start: punch.pauseStartTime,
+      end: now
+    });
+    punch.pauseStartTime = null;
+    // 注意：不改变 timerStatus，后续仍会正确计算活动区间
+  }
+
   const endTime = Date.now();
   const startTime = punch.timerStartTime;
   const pauseSegments = punch.pauseSegments || [];
   let activitySegments = [];
-  
+
   let currentStart = startTime;
-  
   const sortedPauses = [...pauseSegments].sort((a, b) => a.start - b.start);
-  
+
   for (const pause of sortedPauses) {
     if (pause.start > currentStart && pause.start < endTime) {
       if (pause.start > currentStart) {
@@ -1225,43 +1242,44 @@ function buildAndSaveSegmentsFromTimer(punch) {
       currentStart = Math.max(currentStart, pause.end);
     }
   }
-  
+
   if (currentStart < endTime) {
     activitySegments.push({
       startTime: currentStart,
       endTime: endTime
     });
   }
-  
+
   activitySegments = activitySegments.filter(seg => seg.endTime > seg.startTime);
-  
+
   if (activitySegments.length === 0) {
     console.warn('buildAndSaveSegmentsFromTimer: 没有有效的活动区间');
     return null;
   }
-  
+
   const parentId = generateParentId();
   let allSessions = [];
-  
+
   for (const seg of activitySegments) {
     const sessions = splitTimerRangeIntoDays(new Date(seg.startTime), new Date(seg.endTime), punch.id, punch.name, parentId);
     allSessions.push(...sessions);
   }
-  
+
   timerSessions.push(...allSessions);
   localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
-  
+
   const affectedDates = [...new Set(allSessions.map(s => s.date))];
   affectedDates.forEach(date => {
     updatePunchStatusFromSessions(punch.id, date);
   });
-  
+
   punch.timerStartTime = null;
   punch.pauseSegments = [];
   punch.pauseStartTime = null;
-  
+
   return parentId;
 }
+// ================== 修复结束 ==================
 
 function updatePunchStatusFromSessions(cardId, date) {
   const punchesToUpdate = punches.filter(p => p.id === cardId);
@@ -1300,6 +1318,8 @@ function updatePunchStatusFromSessions(cardId, date) {
         punch.timerStatus = 'init';
         punch.timed = true;
       }
+      // 更新自定义周期 lastPunchDate
+      updateCustomDaysLastPunchDate(punch, date);
     } else {
       dayRecord.checked = false;
       if (punch.enableTimer) {
@@ -1493,8 +1513,87 @@ function isInCurrentPeriod(p) {
   }
 }
 
+// 新增：更新自定义周期 lastPunchDate
+async function updateCustomDaysLastPunchDate(punch, dateStr) {
+  if (punch.frequency === 'custom' && punch.customUnit === 'days') {
+    const completedDateStr = dateStr || getTodayDateString();
+    // 获取当前已完成打卡的日期列表（按时间升序）
+    const completedDates = Object.keys(punch.history || {})
+      .filter(d => {
+        const rec = punch.history[d];
+        const max = rec.maxPunches || punch.dailyTimes || 1;
+        return (punch.dailyTimes && punch.dailyTimes > 1) ? (rec.punches || 0) >= max : rec.checked === true;
+      })
+      .sort();
+    // 如果有完成记录，取最新的作为 lastPunchDate；否则设置为 null
+    if (completedDates.length > 0) {
+      punch.lastPunchDate = completedDates[completedDates.length - 1];
+    } else {
+      punch.lastPunchDate = null;
+    }
+    saveToLocalStorage();
+  }
+}
+
+// 迁移旧数据：为所有 custom/days 计划增加 lastPunchDate 字段
+function migrateCustomDaysLastPunchDate() {
+  punches.forEach(p => {
+    if (p.frequency === 'custom' && p.customUnit === 'days') {
+      if (p.lastPunchDate === undefined) {
+        // 从历史记录中获取最后一次完成打卡的日期
+        const completedDates = Object.keys(p.history || {})
+          .filter(d => {
+            const rec = p.history[d];
+            const max = rec.maxPunches || p.dailyTimes || 1;
+            return (p.dailyTimes && p.dailyTimes > 1) ? (rec.punches || 0) >= max : rec.checked === true;
+          })
+          .sort();
+        if (completedDates.length > 0) {
+          p.lastPunchDate = completedDates[completedDates.length - 1];
+        } else {
+          p.lastPunchDate = null;
+        }
+      }
+    }
+  });
+  saveToLocalStorage();
+}
+
 function isInCustomPeriod(p, today) {
   if (!p.customInterval || !p.customUnit) return true;
+  const todayStr = formatDate(today);
+  const todayRecord = p.history && p.history[todayStr];
+  // 如果今天已经完成打卡，且不是每日多次，则不在周期内显示（由 hideCompleted 处理，这里逻辑不变）
+  // 对于 customUnit === 'days'，使用新的基于 lastPunchDate 的规则
+  if (p.customUnit === 'days') {
+    const lastDate = p.lastPunchDate;
+    const intervalDays = p.customInterval;
+    // 如果从未打卡过，应该显示
+    if (!lastDate) {
+      return true;
+    }
+    // 获取 lastDate 对应的日期对象（当天 00:00:00）
+    const last = new Date(lastDate + 'T00:00:00');
+    const current = new Date(todayStr + 'T00:00:00');
+    const diffDays = Math.floor((current - last) / (1000 * 60 * 60 * 24));
+    // 距离上次打卡 >= 间隔天数，且今天未完成，则在周期内
+    // 如果今天已完成，由 shouldShowPunch 中的 hideCompletedTodayPlans 或 isInCurrentPeriod 的其他规则来决定是否显示
+    // 这里只返回“今天理论上应该显示（可打卡）”
+    if (diffDays >= intervalDays) {
+      // 再检查今天是否已完成（如果已完成，应当不显示，但上层会过滤，这里返回 true 也没有关系）
+      // 但为了逻辑清晰，如果今天已完成，这里应该返回 false，避免循环显示
+      if (todayRecord) {
+        const isTodayCompleted = (p.dailyTimes && p.dailyTimes > 1) ? (todayRecord.punches || 0) >= (todayRecord.maxPunches || p.dailyTimes) : todayRecord.checked === true;
+        if (isTodayCompleted) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+  
+  // 原有的其他 custom 逻辑保持不变（weeks, months, years）
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const todayTimestamp = todayStart.getTime();
   
@@ -1529,7 +1628,7 @@ function isInCustomPeriod(p, today) {
   const daysDiff = Math.floor((todayTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
   
   switch(p.customUnit) {
-    case 'days':
+    case 'days': // 已经处理，但保留分支
       return daysDiff % p.customInterval === 0;
     case 'weeks':
       if (!p.customWeekdays || p.customWeekdays.length === 0) {
@@ -1647,6 +1746,16 @@ function isPlanActiveOnDate(punch, dateStr) {
   }
 
   if (punch.frequency === 'custom') {
+    // 使用与 isInCustomPeriod 相同的逻辑，但为了日历统计，不依赖 todayRecord，只判断周期规则
+    if (punch.customUnit === 'days') {
+      const lastDate = punch.lastPunchDate;
+      const intervalDays = punch.customInterval;
+      if (!lastDate) return true;
+      const last = new Date(lastDate + 'T00:00:00');
+      const current = new Date(dateStr + 'T00:00:00');
+      const diffDays = Math.floor((current - last) / (1000 * 60 * 60 * 24));
+      return diffDays >= intervalDays;
+    }
     return isInCustomPeriodForDate(punch, date);
   }
 
@@ -2160,7 +2269,7 @@ function updateCardTimerUI(cardLi, p) {
     }
 }
 
-function undoTodayPunch(punch) {
+async function undoTodayPunch(punch) {
   if (!punch) return;
   
   const today = getTodayDateString();
@@ -2228,6 +2337,9 @@ function undoTodayPunch(punch) {
   if (punch.frequency === 'once') {
     punch.forceActive = true;
   }
+  
+  // 更新自定义周期的 lastPunchDate
+  await updateCustomDaysLastPunchDate(punch, null);
   
   saveAndRender();
   
@@ -2577,7 +2689,7 @@ async function renderPunchList(forceRender = false) {
 
       clickCount++;
       if (clickTimer) clearTimeout(clickTimer);
-      clickTimer = setTimeout(() => {
+      clickTimer = setTimeout(async () => {
         console.log('点击卡片:', p.name, 'ID:', p.id, '点击次数:', clickCount, '当前状态:', {
           done: isDoneToday,
           timed: p.timed,
@@ -2643,7 +2755,7 @@ async function renderPunchList(forceRender = false) {
             saveToLocalStorage();
             updateCardTimerUI(li, p);
           } else if (clickCount === 2) {
-            completeTimerPunch(p);
+            await completeTimerPunch(p);
           }
         } 
         else {
@@ -2664,6 +2776,8 @@ async function renderPunchList(forceRender = false) {
                 if (p.frequency === 'once' && p.forceActive === true) {
                     p.forceActive = false;
                 }
+                // 更新自定义周期的 lastPunchDate
+                await updateCustomDaysLastPunchDate(p, today);
               }
 
               saveAndRender();
@@ -2677,6 +2791,8 @@ async function renderPunchList(forceRender = false) {
               if (p.frequency === 'once' && p.forceActive === true) {
                   p.forceActive = false;
               }
+              // 更新自定义周期的 lastPunchDate
+              await updateCustomDaysLastPunchDate(p, today);
               saveAndRender();
             }
           }
@@ -2965,7 +3081,8 @@ function saveAndRender() {
           isEnded: p.isEnded || false,
           timerStartTime: p.timerStartTime || null,
           pauseSegments: p.pauseSegments || [],
-          pauseStartTime: p.pauseStartTime || null
+          pauseStartTime: p.pauseStartTime || null,
+          lastPunchDate: p.lastPunchDate || null
         };
         return compressed;
       });
@@ -3549,7 +3666,8 @@ if (savePlanBtn) {
       isEnded: false,
       timerStartTime: null,
       pauseSegments: [],
-      pauseStartTime: null
+      pauseStartTime: null,
+      lastPunchDate: null
     };
 
     console.log('创建计划对象:', {
@@ -3587,6 +3705,7 @@ if (savePlanBtn) {
       const existingTimed = punches[editingIndex].timed;
       const existingId = punches[editingIndex].id;
       const existingIsEnded = punches[editingIndex].isEnded || false;
+      const existingLastPunchDate = punches[editingIndex].lastPunchDate || null;
       const mergedHistory = { ...existingHistory, ...plan.history };
 
       if (existingHistory[today]) {
@@ -3603,6 +3722,7 @@ if (savePlanBtn) {
       plan.id = existingId;
       plan.forceActive = punches[editingIndex].forceActive || false;
       plan.isEnded = existingIsEnded;
+      plan.lastPunchDate = existingLastPunchDate;
       
       plan.timerStartTime = punches[editingIndex].timerStartTime || null;
       plan.pauseSegments = punches[editingIndex].pauseSegments || [];
@@ -3619,6 +3739,11 @@ if (savePlanBtn) {
     if (processedIcon) {
       console.log('添加新图标到最近使用列表');
       await addToRecentIcons(processedIcon);
+    }
+
+    // 迁移 lastPunchDate
+    if (plan.frequency === 'custom' && plan.customUnit === 'days') {
+      await updateCustomDaysLastPunchDate(plan, null);
     }
 
     saveAndRender();
@@ -4118,16 +4243,16 @@ async function showDayDetails(date, dateString, dayData) {
         retroactiveBtn.style.cursor = 'not-allowed';
       }
 
-      retroactiveBtn.onclick = function(e) {
+      retroactiveBtn.onclick = async function(e) {
         e.stopPropagation();
         const itemIndex = parseInt(this.dataset.index);
-        retroactivePunch(itemIndex, dateString);
+        await retroactivePunch(itemIndex, dateString);
       };
 
-      undoBtn.onclick = function(e) {
+      undoBtn.onclick = async function(e) {
         e.stopPropagation();
         const itemIndex = parseInt(this.dataset.index);
-        undoPunch(itemIndex, dateString);
+        await undoPunch(itemIndex, dateString);
       };
     }
   }
@@ -4136,7 +4261,7 @@ async function showDayDetails(date, dateString, dayData) {
   dayDetailsModal.style.display = 'flex';
 }
 
-function retroactivePunch(itemIndex, dateString) {
+async function retroactivePunch(itemIndex, dateString) {
   if (itemIndex < 0 || itemIndex >= selectedDayPunchItems.length) {
     alert('无效的计划索引');
     return;
@@ -4191,6 +4316,9 @@ function retroactivePunch(itemIndex, dateString) {
 
   punch.history[dateString] = dayRecord;
 
+  // 更新自定义周期的 lastPunchDate
+  await updateCustomDaysLastPunchDate(punch, dateString);
+
   saveAndRender();
 
   const date = new Date(dateString);
@@ -4198,7 +4326,7 @@ function retroactivePunch(itemIndex, dateString) {
   showDayDetails(date, dateString, dayData);
 }
 
-function undoPunch(itemIndex, dateString) {
+async function undoPunch(itemIndex, dateString) {
   if (itemIndex < 0 || itemIndex >= selectedDayPunchItems.length) {
     alert('无效的计划索引');
     return;
@@ -4237,6 +4365,9 @@ function undoPunch(itemIndex, dateString) {
       dayRecord.checkedTime = null;
     }
 
+    // 更新自定义周期的 lastPunchDate
+    await updateCustomDaysLastPunchDate(punch, null);
+
     saveAndRender();
 
     const date = new Date(dateString);
@@ -4266,6 +4397,9 @@ function undoPunch(itemIndex, dateString) {
       dayRecord.checkedTime = null;
     }
 
+    // 更新自定义周期的 lastPunchDate
+    await updateCustomDaysLastPunchDate(punch, null);
+
     saveAndRender();
 
     const date = new Date(dateString);
@@ -4290,6 +4424,9 @@ function undoPunch(itemIndex, dateString) {
       if (dayRecord.isTimed) {
         removeTimerSessionsForDate(punch.id, dateString);
       }
+
+      // 更新自定义周期的 lastPunchDate
+      await updateCustomDaysLastPunchDate(punch, null);
 
       saveAndRender();
 
@@ -6931,6 +7068,7 @@ async function initApp() {
     if (hideCompletedTodayPlansCheckbox) hideCompletedTodayPlansCheckbox.checked = hideCompletedTodayPlans;
     
     initIsEndedField();
+    migrateCustomDaysLastPunchDate();  // 迁移 lastPunchDate
   } catch (e) {
     console.error('加载数据时出错:', e);
     punches = [];
